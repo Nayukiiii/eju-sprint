@@ -41,11 +41,11 @@
 
     <!-- 主导航栏 -->
     <nav class="main-nav" aria-label="主导航">
-      <button class="nav-tab is-active" data-route="today" type="button">刷题与速查</button>
-      <button class="nav-tab" data-route="math" type="button">数学讲题台</button>
-      <button class="nav-tab" data-route="wrong" type="button">错题本 <span class="nav-badge" id="navWrongBadge">0</span></button>
-      <button class="nav-tab" data-route="plan" type="button">17天方案 <span class="nav-badge nav-badge-ok" id="navPlanBadge">0%</span></button>
-      <button class="nav-tab" data-route="audit" type="button">阶段1核验报告 <span class="nav-badge nav-badge-ok" id="navAuditBadge">34/34 已核</span></button>
+      <button class="nav-tab is-active" data-route="today" type="button"><span class="nav-full">刷题与速查</span><span class="nav-short">刷题</span></button>
+      <button class="nav-tab" data-route="math" type="button"><span class="nav-full">数学讲题台</span><span class="nav-short">讲题</span></button>
+      <button class="nav-tab" data-route="wrong" type="button"><span class="nav-full">错题本</span><span class="nav-short">错题</span> <span class="nav-badge" id="navWrongBadge">0</span></button>
+      <button class="nav-tab" data-route="plan" type="button"><span class="nav-full">17天方案</span><span class="nav-short">方案</span> <span class="nav-badge nav-badge-ok" id="navPlanBadge">0%</span></button>
+      <button class="nav-tab" data-route="audit" type="button"><span class="nav-full">阶段1核验报告</span><span class="nav-short">核验</span> <span class="nav-badge nav-badge-ok" id="navAuditBadge">34/34 已核</span></button>
     </nav>
   </header>
 
@@ -71,7 +71,7 @@
           </svg>
         </div>
         <div class="hero-focus-item">
-          <span class="hero-focus-label">2026年11月8日 EJU 考试倒计时</span>
+          <span class="hero-focus-label">距 EJU 考试（11/8）</span>
           <strong class="hero-focus-val" id="heroCountdownVal">17 天</strong>
           <span class="hero-focus-sub">文科：综合科目 <small>総合科目</small> ＋ 数学1类 <small>数学コース1</small></span>
         </div>
@@ -183,7 +183,7 @@
       <!-- 统一单套导航：年份 → 题号 (如 2025 · 第1問(1) · 1/34) -->
       <div class="tutor-header-bar card">
         <div class="tutor-nav-left">
-          <span class="tutor-nav-title">讲题题单：</span>
+          
           <select id="tutorUnifiedSelect" class="select-compact" aria-label="按年份与题号跳转数学真题"></select>
         </div>
         <div class="tutor-nav-center">
@@ -192,7 +192,7 @@
           <button class="btn btn-sm" id="tutorNextBtn" type="button">下一题 &rarr;</button>
         </div>
         <div class="tutor-nav-right">
-          <button class="btn btn-sm" id="tutorBookmarkBtn" type="button">加入待讲题单</button>
+          <button class="btn btn-sm" id="tutorBookmarkBtn" type="button">加入待讲</button>
         </div>
       </div>
 
@@ -222,8 +222,8 @@
           <!-- 真题原卷与正解表内嵌折叠图 -->
           <div class="tutor-paper-inline" id="tutorPaperInline" hidden>
             <div class="tutor-paper-inline-bar">
-              <button class="btn btn-sm" id="tutorShowScanBtn" type="button">展开本题真题原卷</button>
-              <button class="btn btn-sm" id="tutorShowAnsKeyBtn" type="button" hidden>查看官方正解表</button>
+              <button class="btn btn-sm" id="tutorShowScanBtn" type="button">原卷</button>
+              <button class="btn btn-sm" id="tutorShowAnsKeyBtn" type="button" hidden>正解表</button>
             </div>
             <div class="tutor-scan-wrap" id="tutorScanWrap" hidden>
               <img id="tutorScanImg" src="" alt="真题原卷扫描页">
@@ -233,11 +233,10 @@
           <!-- 分步核对区（折叠保持，不剧透思路） -->
           <div class="tutor-steps-dock">
             <div class="tutor-steps-bar">
-              <span class="steps-label">分步核对：</span>
-              <button class="step-reveal-btn" data-step="hint" type="button">1. 看破题公式</button>
-              <button class="step-reveal-btn" data-step="expl" type="button">2. 看分步演算</button>
-              <button class="step-reveal-btn" data-step="ans" type="button">3. 看最终答案</button>
-              <button class="text-btn" id="tutorRevealAllBtn" type="button">全部展开</button>
+                            <button class="step-reveal-btn" data-step="hint" type="button">公式</button>
+              <button class="step-reveal-btn" data-step="expl" type="button">步骤</button>
+              <button class="step-reveal-btn" data-step="ans" type="button">答案</button>
+              <button class="text-btn" id="tutorRevealAllBtn" type="button">全部</button>
             </div>
 
             <div class="step-box" id="tutorStepHint" hidden></div>
@@ -247,8 +246,8 @@
 
           <!-- 讲完打卡栏（联动更新 17 天方案与错题本） -->
           <div class="tutor-verdict-bar">
-            <button class="btn btn-danger-soft" id="tutorMarkHardBtn" type="button">还没懂 · 记入待讲</button>
-            <button class="btn btn-ok" id="tutorMarkMasteredBtn" type="button">听懂了 · 标记已掌握（计入今日打卡）</button>
+            <button class="btn btn-danger-soft" id="tutorMarkHardBtn" type="button">还没懂</button>
+            <button class="btn btn-ok" id="tutorMarkMasteredBtn" type="button">听懂了</button>
           </div>
         </div>
 
@@ -550,13 +549,13 @@
     <section class="view" id="view-study">
       <article class="card study-card">
         <div class="study-top-bar">
-          <button class="btn btn-sm" id="exitStudyBtn" type="button">&larr; 返回看板</button>
+          <button class="btn btn-sm" id="exitStudyBtn" type="button">&larr; 返回</button>
           <div class="study-progress-wrap">
             <span class="study-progress-text" id="studyProgressText">1 / 20</span>
             <div class="study-progress-bar"><span id="studyProgressFill" style="width:5%"></span></div>
           </div>
           <div class="study-top-actions">
-            <button class="btn btn-sm btn-lang" id="studyLangToggleBtn" type="button" title="点击切换中/日双语">中文译文：开</button>
+            <button class="btn btn-sm btn-lang" id="studyLangToggleBtn" type="button" title="点击切换中/日双语">中文：开</button>
           </div>
           <div class="study-meta-tags">
             <span class="tag" id="studyDeckTag">政治</span>
@@ -573,11 +572,11 @@
 
         <!-- 答题前辅助栏：1行破题提示 / 查看原卷 / 加入数学待讲 -->
         <div class="study-helper-bar">
-          <button class="btn btn-sm" id="studyHintBtn" type="button">看破题提示</button>
-          <button class="btn btn-sm" id="studyRefBtn" type="button">查本节速查表</button>
-          <button class="btn btn-sm btn-unsure" id="studyUnsureBtn" type="button" title="不确定此题答案，按答错计入错题本">不确定（进错题）</button>
-          <button class="btn btn-sm" id="studyPaperBtn" type="button" hidden>看真题原卷</button>
-          <button class="btn btn-sm" id="studyBookmarkMathBtn" type="button" hidden>留给今晚讲数学</button>
+          <button class="btn btn-sm" id="studyHintBtn" type="button">提示</button>
+          <button class="btn btn-sm" id="studyRefBtn" type="button">速查表</button>
+          <button class="btn btn-sm btn-unsure" id="studyUnsureBtn" type="button" title="不确定此题答案，按答错计入错题本">不确定</button>
+          <button class="btn btn-sm" id="studyPaperBtn" type="button" hidden>原卷</button>
+          <button class="btn btn-sm" id="studyBookmarkMathBtn" type="button" hidden>留着讲</button>
         </div>
 
         <div class="study-hint-box" id="studyHintBox" hidden></div>
@@ -638,11 +637,11 @@
         <!-- 底部评分/下一题控制栏 -->
         <div class="study-Rate-bar" id="studyRateBar" hidden>
           <div class="rate-buttons" id="rateButtonsGroup">
-            <button class="btn btn-danger-soft" data-rate="again" type="button">没掌握 · 进错题 (1)</button>
-            <button class="btn" data-rate="hard" type="button">模糊 · 明天复习 (2)</button>
-            <button class="btn btn-ok" data-rate="good" type="button">掌握 · 下一题 (Space / 3)</button>
+            <button class="btn btn-danger-soft" data-rate="again" type="button">没掌握<span class="kbd"> (1)</span></button>
+            <button class="btn" data-rate="hard" type="button">模糊<span class="kbd"> (2)</span></button>
+            <button class="btn btn-ok" data-rate="good" type="button">掌握<span class="kbd"> (3)</span></button>
           </div>
-          <button class="btn btn-sm" id="studyNextVariantBtn" type="button">练一道同考点题</button>
+          <button class="btn btn-sm" id="studyNextVariantBtn" type="button">同考点再练一道</button>
         </div>
 
         <div class="kbd-hint">快捷键：选择题按 <code>1-4</code> · 填空题按 <code>0-9/-</code> · <code>Enter/Space</code> 提交与下一题</div>

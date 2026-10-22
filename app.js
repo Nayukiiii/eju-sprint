@@ -123,7 +123,7 @@
 
   function getSourceBadgeHtml(card) {
     if (isUnverified(card)) {
-      return `<span class="tag tag-source-unverified" title="无官方正解表出处，不计入掌握率">未核实 · 不计入掌握率</span>`;
+      return `<span class="tag tag-source-unverified" title="无官方正解表出处，不计入掌握率">未核实</span>`;
     }
     if (card.auditStatus === 'discrepancy') {
       return `<span class="tag tag-source-warn" title="题面/正解表/题库三者存在不一致，待裁定">待裁定 · ${card.source}</span>`;
@@ -135,7 +135,7 @@
     if (tagEl) {
       if (isUnverified(card)) {
         tagEl.className = 'tag tag-source-unverified';
-        tagEl.textContent = '未核实 · 不计入掌握率';
+        tagEl.textContent = '未核实';
       } else if (card.auditStatus === 'discrepancy') {
         tagEl.className = 'tag tag-source-warn';
         tagEl.textContent = `待裁定 · ${card.source}`;
@@ -150,13 +150,12 @@
         bannerEl.className = 'study-audit-banner is-discrepancy';
         bannerEl.textContent = `【阶段1核验提醒 · 待裁定】${card.auditNote}`;
       } else if (isUnverified(card)) {
-        bannerEl.hidden = false;
-        bannerEl.className = 'study-audit-banner is-unverified';
+        // The 未核实 tag already says it; only speak up when the AI check doubts this question
         const ai = window.EJU_AI_VERIFY?.verdictFor(card.id);
-        const aiNote = !ai ? '' : ai.verdict === 'agree'
-          ? ' AI 交叉核验：与题库答案一致。'
-          : ` AI 交叉核验：${ai.label}${ai.summary ? `——${ai.summary}` : ''}（详见「核验报告」）`;
-        bannerEl.textContent = `【未核实题目】本题暂无官方正解表出处，仅供知识点练习，作答结果不计入掌握率。${aiNote}`;
+        const doubt = ai && (ai.verdict === 'disagree' || ai.verdict === 'doubt');
+        bannerEl.hidden = !doubt;
+        bannerEl.className = 'study-audit-banner is-unverified';
+        bannerEl.textContent = doubt ? `AI 核验${ai.label}${ai.summary ? `：${ai.summary}` : ''}` : '';
       } else {
         bannerEl.hidden = true;
         bannerEl.textContent = '';
@@ -407,7 +406,7 @@
     }
 
     $('#consoleTitle').textContent = periodMode === 'bunso' ? '文综分科刷题与掌握进度' : '全科刷题与掌握进度';
-    $('#consoleSub').textContent = `当前选中：【${selectedDeck}】— 注：标记“未核实”的题目练习时不计入掌握率`;
+    $('#consoleSub').textContent = `当前：${selectedDeck}（未核实题不计入掌握率）`;
 
     const container = $('#deckFilterBar');
     container.innerHTML = '';
@@ -437,7 +436,7 @@
         <div class="deck-chip-sub">${
           hasVerified
             ? `已核实掌握 ${mastered}/${verifiedPool.length}${unverifiedInPool ? ` · 未核实 ${unverifiedInPool}` : ''}${wrong ? ` · 错题 ${wrong}` : ''}`
-            : `未核实 · 不计入掌握率${wrong ? ` · 错题 ${wrong}` : ''}`
+            : (wrong ? `错题 ${wrong}` : '')
         }</div>
       `;
       btn.addEventListener('click', () => {
@@ -560,7 +559,13 @@
   }
 
   function prioritizeCards(pool, limit = 20) {
-    return [...pool]
+    // Shuffle first: the sort is stable, so cards of equal priority come out mixed across subjects
+    const shuffled = [...pool];
+    for (let i = shuffled.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
+    }
+    return shuffled
       .sort((a, b) => {
         const score = c => {
           const p = getProgress(c);
@@ -623,7 +628,7 @@
 
     const langBtn = $('#studyLangToggleBtn');
     if (langBtn) {
-      langBtn.textContent = showChinese ? '中文译文：开' : '中文译文：关 (日文原文)';
+      langBtn.textContent = showChinese ? '中文：开' : '中文：关';
       langBtn.className = showChinese ? 'btn btn-sm btn-lang' : 'btn btn-sm btn-lang is-jp';
     }
 
@@ -644,7 +649,7 @@
     const mathBmBtn = $('#studyBookmarkMathBtn');
     if (isMathCard(activeCard)) {
       mathBmBtn.hidden = false;
-      mathBmBtn.textContent = isBookmarked(activeCard) ? '已加入今晚待讲' : '留给今晚讲数学';
+      mathBmBtn.textContent = isBookmarked(activeCard) ? '已留着讲' : '留着讲';
     } else {
       mathBmBtn.hidden = true;
     }
@@ -673,7 +678,8 @@
         const btn = document.createElement('button');
         btn.type = 'button';
         btn.className = 'choice-btn';
-        const cn = showChinese && cnList[idx] && cnList[idx] !== choiceText ? `<span class="choice-cn">${cnList[idx]}</span>` : '';
+        const cnText = chineseAddition(choiceText, cnList[idx]);
+        const cn = showChinese && cnText ? `<span class="choice-cn">${cnText}</span>` : '';
         btn.innerHTML = `<span class="choice-key">${idx + 1}</span><span class="choice-body"><span class="choice-jp">${choiceText}</span>${cn}</span>`;
         btn.addEventListener('click', () => handleAnswerMcq(idx, btn));
         choicesBox.appendChild(btn);
@@ -825,6 +831,20 @@
     showStudyFeedback(isCorrect, mcqAnswerText(activeCard));
   }
 
+  // Chinese under a Japanese option, only when it adds something: drop "下田・箱館（下田·箱馆）"-style echoes
+  function chineseAddition(ja, cn) {
+    if (!cn || cn === ja) return '';
+    const norm = t => String(t).replace(/[·・\s]/g, '').replace(/[「」（）()]/g, '');
+    let extra = cn;
+    if (cn.startsWith(ja)) extra = cn.slice(ja.length).replace(/^（|）$/g, '');
+    if (!extra.trim()) return '';
+    // Mostly the same characters (simplified vs. Japanese forms differ only here and there) → an echo
+    const chars = [...norm(extra)];
+    const jaChars = new Set(norm(ja));
+    const shared = chars.filter(ch => jaChars.has(ch)).length;
+    return chars.length && shared / chars.length >= 0.6 ? '' : extra;
+  }
+
   function mcqAnswerText(card) {
     return `(${card.a + 1}) ${card.choices[card.a]}`;
   }
@@ -874,7 +894,7 @@
       ansEl.hidden = true;
     } else if (isCorrect === false) {
       statusEl.className = 'feedback-status is-bad';
-      statusEl.textContent = `回答错误（已自动计入错题本）· 正确答案：${answerText}`;
+      statusEl.textContent = `答错（已进错题本）· 正确答案：${answerText}`;
       ansEl.hidden = true;
     } else {
       statusEl.className = 'feedback-status';
@@ -887,7 +907,7 @@
     if (activeCard.optExpl && Array.isArray(activeCard.optExpl) && activeCard.optExpl.length === 4) {
       optExplBox.hidden = false;
       optExplBox.innerHTML = `
-        <div class="opt-expl-heading">选项逐项深度解析（正确项为何对 · 干扰项各自错在哪）：</div>
+        <div class="opt-expl-heading">逐项解析</div>
         <div class="opt-expl-list">
           ${activeCard.optExpl.map((txt, idx) => `
             <div class="opt-expl-item ${idx === activeCard.a ? 'is-correct-opt' : 'is-wrong-opt'}">
@@ -921,7 +941,7 @@
     const matchedKp = kpList.find(k => k.id === activeCard.kpLink) || kpList.find(k => k.deck === activeCard.deck);
     if (matchedKp) {
       kpDock.hidden = false;
-      kpBtn.textContent = `查看本题对应核心考点速查：【${matchedKp.title}】`;
+      kpBtn.textContent = '考点速查';
       kpBtn.onclick = () => {
         $('#refModalTitle').textContent = matchedKp.title;
         $('#refModalBody').innerHTML = matchedKp.html;
@@ -1073,10 +1093,10 @@
             ${getSourceBadgeHtml(c)}
             <div class="wrong-dual-tags">
               <span class="wrong-tag-chip ${p.clearedOriginal ? 'is-cleared' : 'is-pending'}">
-                原题答对：${p.clearedOriginal ? '1/1 ✓' : '0/1 待攻克'}
+                原题 ${p.clearedOriginal ? '✓' : '0/1'}
               </span>
               <span class="wrong-tag-chip ${p.clearedVariant ? 'is-cleared' : 'is-pending'}">
-                同考点变式：${p.clearedVariant ? '1/1 ✓' : '0/1 待攻克'}
+                变式 ${p.clearedVariant ? '✓' : '0/1'}
               </span>
             </div>
           </div>
@@ -1084,10 +1104,10 @@
           <div class="wrong-item-ans">正确答案：${ansText}</div>
         </div>
         <div class="wrong-item-actions">
-          <button class="btn btn-sm btn-primary" data-act="practice" type="button">重练原题</button>
-          <button class="btn btn-sm" data-act="variant" type="button">练同考点题</button>
-          ${isMathCard(c) ? `<button class="btn btn-sm" data-act="tutor" type="button">去讲题台</button>` : ''}
-          <button class="btn btn-sm" data-act="clear" type="button">手动移出</button>
+          <button class="btn btn-sm btn-primary" data-act="practice" type="button">重练</button>
+          <button class="btn btn-sm" data-act="variant" type="button">同考点</button>
+          ${isMathCard(c) ? `<button class="btn btn-sm" data-act="tutor" type="button">讲题</button>` : ''}
+          <button class="btn btn-sm" data-act="clear" type="button">移出</button>
         </div>
       `;
 
@@ -1309,7 +1329,7 @@
           </div>
           <div class="mini-bar mini-bar-ok"><span style="width:${pct}%"></span></div>
           <div class="phase-mod-foot">
-            <span>${hasVerified ? `已核实掌握 ${mCount} / ${verifiedPool.length} 题` : `未核实 ${pool.length} 题（不计入掌握率）`}</span>
+            <span>${hasVerified ? `已核实掌握 ${mCount} / ${verifiedPool.length} 题` : `${pool.length} 题`}</span>
             <button class="text-btn" type="button">${unmastered.length ? `去练习 (${unmastered.length})` : '复习本组'}</button>
           </div>
         `;
@@ -1434,7 +1454,7 @@
     statusEl.className = `tag ${mastered ? '' : 'tag-subtle'}`;
 
     const bmBtn = $('#tutorBookmarkBtn');
-    bmBtn.textContent = isBookmarked(card) ? '已加入待讲 (移出)' : '加入待讲题单';
+    bmBtn.textContent = isBookmarked(card) ? '已在待讲 ✓' : '加入待讲';
 
     // Bilingual display for question (Japanese original + collapsible Chinese)
     $('#tutorQuestionText').textContent = card.q;
@@ -1458,7 +1478,7 @@
       const blanksWrap = document.createElement('div');
       blanksWrap.className = 'tutor-mark-blanks-preview';
       blanksWrap.innerHTML = `
-        <div class="mark-tip-bar" style="margin-bottom:8px">【EJU マーク式 填空】原卷栏位（点「3. 看最终答案」后显示正解）：</div>
+        <div class="mark-tip-bar" style="margin-bottom:8px">答题栏（点「答案」显示正解）</div>
         <div class="mark-slots-wrap" style="margin-bottom:8px">
           ${card.blanks.map(b => `
             <div class="mark-slot-box" style="padding:6px 10px">
@@ -1930,6 +1950,13 @@
     $('#statMasteryBox').addEventListener('click', () => switchRoute('plan'));
 
     // Practice console buttons
+    // Hero: continue an unfinished round, otherwise today's mix (due → wrong → unmastered) from all subjects
+    $('#heroStartTaskBtn').addEventListener('click', () => {
+      if (!$('#resumeSessionBtn').hidden) $('#resumeSessionBtn').click();
+      else startCustomPoolSession(cards, '今日任务', 20);
+    });
+    $('#heroWrongBox').addEventListener('click', () => switchRoute('wrong'));
+
     $('#startSmartBtn').addEventListener('click', () => {
       startCustomPoolSession(getFilteredPoolBySelectedDeck(), selectedDeck, 20);
     });
@@ -1981,7 +2008,7 @@
       if (!activeCard) return;
       state.bookmarks[activeCard.id] = !state.bookmarks[activeCard.id];
       saveState();
-      $('#studyBookmarkMathBtn').textContent = isBookmarked(activeCard) ? '已加入今晚待讲' : '留给今晚讲数学';
+      $('#studyBookmarkMathBtn').textContent = isBookmarked(activeCard) ? '已留着讲' : '留着讲';
       renderTopBarAndDashboard();
     });
     $('#studyRefBtn').addEventListener('click', () => {
