@@ -1,0 +1,819 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+  <meta name="theme-color" content="#f5f4ef">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <title>EJU 冲刺工作台</title>
+  <link rel="manifest" href="./manifest.webmanifest">
+  <link rel="icon" href="./icon.svg" type="image/svg+xml">
+  <link rel="apple-touch-icon" href="./icon-192.png">
+  <!-- 暖纸衬线与正文双语字体 -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;600;700&family=Noto+Sans+SC:wght@400;500;600;700&family=Noto+Serif+SC:wght@600;700&display=swap" rel="stylesheet">
+  <!-- KaTeX 数学公式渲染支持 (同步加载确保公式100%即时渲染) -->
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.css" crossorigin="anonymous">
+  <script src="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.js" crossorigin="anonymous"></script>
+  <script src="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/contrib/auto-render.min.js" crossorigin="anonymous"></script>
+  <link rel="stylesheet" href="./styles.css">
+</head>
+<body>
+  <header class="topbar">
+    <div class="topbar-inner">
+      <div class="brand-group">
+        <span class="brand-title">EJU 冲刺工作台</span>
+        <span class="countdown-badge" id="countdownBadge">距考试 17 天</span>
+      </div>
+
+      <!-- 时段模式切换：日间文综自习 vs 晚间数学讲题台 -->
+      <div class="period-switch" role="group" aria-label="学习时段模式" hidden>
+        <button class="period-btn is-active" id="modeBunsoBtn" type="button">日间 · 文综自习</button>
+        <button class="period-btn" id="modeMathBtn" type="button">晚间 · 数学讲题台 <span class="badge-count" id="tutorQueueBadge">0</span></button>
+      </div>
+
+      <div class="top-actions">
+        <button class="text-btn" id="syncBtn" type="button" title="多端进度同步">云同步</button>
+        <button class="text-btn" id="themeBtn" type="button" title="切换护眼日夜模式">夜间</button>
+      </div>
+    </div>
+
+    <!-- 主导航栏 -->
+    <nav class="main-nav" aria-label="主导航">
+      <button class="nav-tab is-active" data-route="today" type="button">刷题与速查</button>
+      <button class="nav-tab" data-route="math" type="button">数学讲题台</button>
+      <button class="nav-tab" data-route="wrong" type="button">错题本 <span class="nav-badge" id="navWrongBadge">0</span></button>
+      <button class="nav-tab" data-route="plan" type="button">17天方案 <span class="nav-badge nav-badge-ok" id="navPlanBadge">0%</span></button>
+      <button class="nav-tab" data-route="audit" type="button">阶段1核验报告 <span class="nav-badge" id="navAuditBadge">12待裁定</span></button>
+    </nav>
+  </header>
+
+  <main class="shell">
+    <!-- ═══════════════════════════════════════════════════════════════════
+         视图 1：刷题与速查（顶部实时进度看板 + 分科掌握度 + 折叠速查表）
+         ═══════════════════════════════════════════════════════════════════ -->
+    <section class="view is-active" id="view-today">
+      <!-- 阶段4首屏核心三要素：考试倒计时 · 开始今日任务主按钮 · 错题待消数 -->
+      <article class="card hero-focus-card" id="heroFocusCard">
+        <div class="hero-focus-item">
+          <span class="hero-focus-label">2026年11月8日 EJU 考试倒计时</span>
+          <strong class="hero-focus-val" id="heroCountdownVal">17 天</strong>
+          <span class="hero-focus-sub">文科：综合科目 <small>総合科目</small> ＋ 数学1类 <small>数学コース1</small></span>
+        </div>
+        <div class="hero-focus-cta">
+          <button class="btn btn-primary btn-hero-main" id="heroStartTaskBtn" type="button">开始今日任务</button>
+          <span class="hero-focus-sub">智能抽取今日到期复习、待消错题与核心必考题</span>
+        </div>
+        <div class="hero-focus-item hero-focus-wrong" id="heroWrongBox" title="点击进入错题本">
+          <span class="hero-focus-label">错题待消数</span>
+          <strong class="hero-focus-val hero-val-danger" id="heroWrongVal">0</strong>
+          <span class="hero-focus-sub">原题答对1次＋同考点变形题答对1次移出 &rarr;</span>
+        </div>
+      </article>
+
+      <!-- 顶部常驻学习进度看板（与方案、错题实时联动） -->
+      <div class="dashboard-strip">
+        <div class="stat-item">
+          <div class="stat-label">今日已刷</div>
+          <div class="stat-val-row">
+            <strong class="stat-val" id="statTodayCount">0 / 40</strong>
+            <span class="stat-sub" id="statStreak">连续 0 天</span>
+          </div>
+          <div class="mini-bar"><span id="statTodayBar" style="width:0%"></span></div>
+        </div>
+        <div class="stat-item stat-clickable" id="statDueBox" title="点击复习到期题目">
+          <div class="stat-label">待复习（到期）</div>
+          <div class="stat-val-row">
+            <strong class="stat-val" id="statDueCount">0</strong>
+            <span class="stat-link">去复习 &rarr;</span>
+          </div>
+          <div class="stat-hint">按艾宾浩斯间隔推送</div>
+        </div>
+        <div class="stat-item stat-clickable" id="statWrongBox" title="点击进入错题本重练">
+          <div class="stat-label">错题本待消</div>
+          <div class="stat-val-row">
+            <strong class="stat-val stat-val-danger" id="statWrongCount">0</strong>
+            <span class="stat-link">消错题 &rarr;</span>
+          </div>
+          <div class="stat-hint">原题+变形题双通关移出</div>
+        </div>
+        <div class="stat-item stat-clickable" id="statMasteryBox" title="点击查看17天方案与各科联动进度">
+          <div class="stat-label">题库总掌握率</div>
+          <div class="stat-val-row">
+            <strong class="stat-val stat-val-ok" id="statMasteryPct">0%</strong>
+            <span class="stat-sub" id="statMasterySub">0 / 0 题</span>
+          </div>
+          <div class="mini-bar mini-bar-ok"><span id="statMasteryBar" style="width:0%"></span></div>
+        </div>
+      </div>
+
+      <!-- 刷题控制台：分科掌握度选择 + 一键开刷 -->
+      <article class="card practice-console">
+        <div class="console-header">
+          <div>
+            <h2 class="section-title" id="consoleTitle">文综分科刷题与掌握进度</h2>
+            <p class="section-sub" id="consoleSub">点击下方科目筛选，优先抽取到期卡、错题与未掌握题目</p>
+          </div>
+          <div class="console-actions">
+            <button class="btn btn-primary" id="startSmartBtn" type="button">开始今日任务 (20题)</button>
+            <details class="sub-actions-menu">
+              <summary class="btn">更多模式 &darr;</summary>
+              <div class="sub-actions-dropdown">
+                <button class="btn btn-sm" id="startUnmasteredBtn" type="button">只刷未掌握</button>
+                <button class="btn btn-sm" id="startVariantBtn" type="button">变形题特训</button>
+                <button class="btn btn-sm" id="resumeSessionBtn" type="button" hidden>继续未完刷题</button>
+              </div>
+            </details>
+          </div>
+        </div>
+
+        <!-- 科目进度芯片网格（显示每科掌握率进度条） -->
+        <div class="deck-progress-grid" id="deckFilterBar"></div>
+      </article>
+
+      <!-- 核心考点速查表（默认折叠、搜索过滤、无长篇废话） -->
+      <article class="card">
+        <div class="section-head">
+          <div>
+            <h2 class="section-title">核心考点速查表（点击展开）</h2>
+            <p class="section-sub">全部浓缩为对比表格与一句话规则，支持关键词搜索</p>
+          </div>
+          <div class="search-inline">
+            <input id="globalSearchInput" type="search" placeholder="搜考点 / 条约 / 公式（如：衆議院、南京条約、余弦）" autocomplete="off">
+            <button class="text-btn" id="clearSearchBtn" type="button" hidden>清空</button>
+          </div>
+        </div>
+
+        <div class="cat-tabs" id="knowledgeCatTabs">
+          <button class="cat-tab is-active" data-cat="all" type="button">全部</button>
+          <button class="cat-tab" data-cat="pol" type="button">日本政治</button>
+          <button class="cat-tab" data-cat="trt" type="button">条约对比</button>
+          <button class="cat-tab" data-cat="geo" type="button">地理统计</button>
+          <button class="cat-tab" data-cat="eco" type="button">经济时事</button>
+          <button class="cat-tab" data-cat="math" type="button">数学公式</button>
+        </div>
+
+        <!-- 搜到的题库匹配结果（仅在输入搜索词时出现） -->
+        <div id="searchCardsResult" class="search-cards-box" hidden></div>
+
+        <!-- 折叠速查词条列表 -->
+        <div id="knowledgeList" class="knowledge-accordion"></div>
+      </article>
+    </section>
+
+    <!-- ═══════════════════════════════════════════════════════════════════
+         视图 2：晚间 · 数学讲题台（专为女朋友讲题设计：题目+原卷+白板+动态图像）
+         ═══════════════════════════════════════════════════════════════════ -->
+    <section class="view" id="view-math">
+      <!-- 统一单套导航：年份 → 题号 (如 2025 · 第1問(1) · 1/34) -->
+      <div class="tutor-header-bar card">
+        <div class="tutor-nav-left">
+          <span class="tutor-nav-title">讲题题单：</span>
+          <select id="tutorUnifiedSelect" class="select-compact" aria-label="按年份与题号跳转数学真题"></select>
+        </div>
+        <div class="tutor-nav-center">
+          <button class="btn btn-sm" id="tutorPrevBtn" type="button">&larr; 上一题</button>
+          <span class="tutor-unified-indicator" id="tutorUnifiedIndicator">2025 · 第1問(1) · 1/34</span>
+          <button class="btn btn-sm" id="tutorNextBtn" type="button">下一题 &rarr;</button>
+        </div>
+        <div class="tutor-nav-right">
+          <button class="btn btn-sm" id="tutorBookmarkBtn" type="button">加入待讲题单</button>
+        </div>
+      </div>
+
+      <!-- 讲题台左右分栏：左侧题面（占~42%），右侧手写白板与单元工具（占屏幕一半以上，可全屏） -->
+      <div class="tutor-split">
+        <!-- 左侧：题面与分步核对区 -->
+        <div class="tutor-left card">
+          <div class="tutor-card-meta">
+            <div class="tutor-meta-left">
+              <span class="tag" id="tutorCardTopic">二次函数</span>
+              <span class="tag tag-subtle" id="tutorCardStatus">未掌握</span>
+              <span class="tag" id="tutorCardSource">未核实</span>
+            </div>
+            <div class="tutor-card-meta-right">
+              <button class="btn btn-sm btn-primary" id="tutorPasteQuestionBtn" type="button" title="将题面贴到右侧白板草稿中进行圈画">贴题到白板</button>
+              <button class="btn btn-sm btn-lang" id="tutorLangToggleBtn" type="button">中文：开</button>
+            </div>
+          </div>
+
+          <div class="study-audit-banner" id="tutorAuditBanner" hidden></div>
+          <div class="tutor-question-box" id="tutorQuestionText"></div>
+          <div class="study-question-sub" id="tutorQuestionSub" hidden></div>
+
+          <!-- マーク式填空栏位预览（原卷对应空格与答案对照） -->
+          <div class="tutor-choices-box" id="tutorChoicesBox"></div>
+
+          <!-- 真题原卷与正解表内嵌折叠图 -->
+          <div class="tutor-paper-inline" id="tutorPaperInline" hidden>
+            <div class="tutor-paper-inline-bar">
+              <button class="btn btn-sm" id="tutorShowScanBtn" type="button">展开本题真题原卷</button>
+              <button class="btn btn-sm" id="tutorShowAnsKeyBtn" type="button" hidden>查看官方正解表</button>
+            </div>
+            <div class="tutor-scan-wrap" id="tutorScanWrap" hidden>
+              <img id="tutorScanImg" src="" alt="真题原卷扫描页">
+            </div>
+          </div>
+
+          <!-- 分步核对区（折叠保持，不剧透思路） -->
+          <div class="tutor-steps-dock">
+            <div class="tutor-steps-bar">
+              <span class="steps-label">分步核对：</span>
+              <button class="step-reveal-btn" data-step="hint" type="button">1. 看破题公式</button>
+              <button class="step-reveal-btn" data-step="expl" type="button">2. 看分步演算</button>
+              <button class="step-reveal-btn" data-step="ans" type="button">3. 看最终答案</button>
+              <button class="text-btn" id="tutorRevealAllBtn" type="button">全部展开</button>
+            </div>
+
+            <div class="step-box" id="tutorStepHint" hidden></div>
+            <div class="step-box" id="tutorStepExpl" hidden></div>
+            <div class="step-box step-box-ans" id="tutorStepAns" hidden></div>
+          </div>
+
+          <!-- 讲完打卡栏（联动更新 17 天方案与错题本） -->
+          <div class="tutor-verdict-bar">
+            <button class="btn btn-danger-soft" id="tutorMarkHardBtn" type="button">还没懂 · 记入待讲</button>
+            <button class="btn btn-ok" id="tutorMarkMasteredBtn" type="button">听懂了 · 标记已掌握（计入今日打卡）</button>
+          </div>
+        </div>
+
+                <!-- 右侧：手写演算白板（默认常开，占屏幕一半以上）与上方单元智能计算工具抽屉 -->
+        <div class="tutor-right card">
+          <div class="tool-tabs-bar">
+            <div class="tool-tabs" id="toolTabsGroup">
+              <button class="tool-tab is-active" data-tool="board" type="button">手写演算白板</button>
+              <button class="tool-tab" data-tool="quad" type="button">二次函数</button>
+              <button class="tool-tab" data-tool="expr" type="button">数与式</button>
+              <button class="tool-tab" data-tool="trig" type="button">图形与计量</button>
+              <button class="tool-tab" data-tool="prob" type="button">場合の数・確率</button>
+              <button class="tool-tab" data-tool="integers" type="button">整数の性質</button>
+              <button class="tool-tab" data-tool="stats" type="button">データの分析</button>
+              <button class="tool-tab" data-tool="geogebra" type="button">GeoGebra</button>
+            </div>
+            <button class="btn btn-sm" id="wbFullscreenBtn" type="button">全屏白板</button>
+          </div>
+
+          <!-- 白板上方：单元智能计算工具抽屉（点击上方单元按钮展开，不遮挡下方手写白板） -->
+          <div class="tutor-calc-drawer" id="tutorCalcDrawer" hidden>
+            <div class="calc-drawer-head">
+              <span><strong>单元计算与过程演示</strong>（计算过程支持一键「贴到白板」）：</span>
+              <button class="text-btn" id="closeCalcDrawerBtn" type="button">收起计算工具 &uarr;</button>
+            </div>
+
+            <!-- 单元工具 1：二次函数 (输入a,b,c -> 配方过程·顶点·轴·判别式D·区间最值·动态抛物线) -->
+            <div class="calc-pane" id="toolPane-quad" hidden>
+              <div class="quad-std-bar">
+                <span>一般式输入 $y = ax^2 + bx + c$：</span>
+                <label>$a=$ <input type="number" id="quadStdA" value="1" step="0.5" style="width:56px"></label>
+                <label>$b=$ <input type="number" id="quadStdB" value="-4" step="1" style="width:56px"></label>
+                <label>$c=$ <input type="number" id="quadStdC" value="3" step="1" style="width:56px"></label>
+                <button class="btn btn-xs btn-primary" id="quadStdCalcBtn" type="button">代入配方与求根</button>
+              </div>
+
+              <div class="quad-presets">
+                <span class="steps-label">区间位置预设：</span>
+                <button class="btn btn-xs" data-quad-preset="left" type="button">轴在区间左 ($p &lt; m$)</button>
+                <button class="btn btn-xs" data-quad-preset="mid" type="button">轴在区间内 ($m \le p \le n$)</button>
+                <button class="btn btn-xs" data-quad-preset="right" type="button">轴在区间右 ($p &gt; n$)</button>
+                <button class="btn btn-xs" data-quad-preset="down" type="button">开口向下 ($a &lt; 0$)</button>
+              </div>
+
+              <div class="quad-controls-grid">
+                <label class="slider-row">
+                  <span>开口 $a$: <strong id="quadValA">1</strong></span>
+                  <input type="range" id="quadSliderA" min="-2.5" max="2.5" step="0.5" value="1">
+                </label>
+                <label class="slider-row">
+                  <span>对称轴 $p$: <strong id="quadValP">2</strong></span>
+                  <input type="range" id="quadSliderP" min="-4" max="6" step="0.5" value="2">
+                </label>
+                <label class="slider-row">
+                  <span>顶点纵坐标 $q$: <strong id="quadValQ">-1</strong></span>
+                  <input type="range" id="quadSliderQ" min="-5" max="5" step="0.5" value="-1">
+                </label>
+                <label class="slider-row">
+                  <span>定义域区间 $[m, n]$: <strong id="quadValRange">[0, 3]</strong></span>
+                  <div class="range-pair">
+                    <input type="number" id="quadInputM" value="0" min="-6" max="6" step="0.5">
+                    <span>至</span>
+                    <input type="number" id="quadInputN" value="3" min="-6" max="6" step="0.5">
+                  </div>
+                </label>
+              </div>
+
+              <div class="quad-formula-banner" id="quadFormulaBanner"></div>
+              <div class="quad-canvas-wrap">
+                <canvas id="quadCanvas" width="680" height="260"></canvas>
+              </div>
+            </div>
+
+            <!-- 单元工具 2：数与式 (根号/分母有理化·十字相乘因式分解·绝对值不等式数轴) -->
+            <div class="calc-pane" id="toolPane-expr" hidden>
+              <div class="math-subtool-card">
+                <h4>一、二次根式化简 $\sqrt{N}$ 与分母有理化 $\frac{c}{\sqrt{a}+\sqrt{b}}$</h4>
+                <div class="tool-row-inputs">
+                  <label>$\sqrt{N}$: <input type="number" id="exprRadicalInput" value="72" min="2" max="9999" style="width:64px"></label>
+                  <span>｜ 有理化 $\frac{c}{\sqrt{a}+\sqrt{b}}$：</span>
+                  <label>$c=$<input type="number" id="exprRatC" value="2" style="width:48px"></label>
+                  <label>$a=$<input type="number" id="exprRatA" value="5" style="width:48px"></label>
+                  <label>$b=$<input type="number" id="exprRatB" value="3" style="width:48px"></label>
+                  <button class="btn btn-sm btn-primary" id="exprRadicalBtn" type="button">分步化简</button>
+                </div>
+                <div class="tool-out-box" id="exprRadicalOut"></div>
+              </div>
+
+              <div class="math-subtool-card">
+                <h4>二、二次三项式因式分解（十字相乘 たすき掛け 验算）</h4>
+                <div class="tool-row-inputs">
+                  <input type="number" id="exprFactorA" value="6" style="width:52px"> $x^2 +$
+                  <input type="number" id="exprFactorB" value="5" style="width:52px"> $x +$
+                  <input type="number" id="exprFactorC" value="-6" style="width:52px">
+                  <button class="btn btn-sm btn-primary" id="exprFactorBtn" type="button">十字相乘分解</button>
+                </div>
+                <div class="tool-out-box" id="exprFactorOut"></div>
+              </div>
+
+              <div class="math-subtool-card">
+                <h4>三、绝对值不等式与数轴图示（$|x - p| \le d$ 或 $\ge d$）</h4>
+                <div class="tool-row-inputs">
+                  <span>$|x - $</span>
+                  <input type="number" id="exprAbsCenter" value="3" style="width:52px">
+                  <span>$|$</span>
+                  <select id="exprAbsType" class="select-xs">
+                    <option value="le">&le; (闭区间内)</option>
+                    <option value="ge">&ge; (两侧外部)</option>
+                  </select>
+                  <input type="number" id="exprAbsDist" value="5" min="0.5" step="0.5" style="width:52px">
+                  <button class="btn btn-sm btn-primary" id="exprAbsBtn" type="button">解不等式并绘数轴</button>
+                </div>
+                <div class="tool-out-box" id="exprAbsOut"></div>
+                <div class="canvas-box-wrap"><canvas id="exprAbsCanvas" width="640" height="84"></canvas></div>
+              </div>
+            </div>
+
+            <!-- 单元工具 3：图形与计量 (正余弦定理代入过程·面积·外接圆R·内切圆r·特殊角表·作图) -->
+            <div class="calc-pane" id="toolPane-trig" hidden>
+              <div class="math-subtool-card">
+                <h4>一、正弦/余弦定理与面积 $S$、外接圆 $R$、内切圆 $r$ 验算器</h4>
+                <div class="trig-inputs">
+                  <label>边 $b$: <input type="number" id="trigB" value="5" step="0.5" style="width:62px"></label>
+                  <label>边 $c$: <input type="number" id="trigC" value="8" step="0.5" style="width:62px"></label>
+                  <label>夹角 $A (°)$: <input type="number" id="trigAngleA" value="60" step="15" style="width:62px"></label>
+                  <button class="btn btn-sm btn-primary" id="trigCalcBtn" type="button">演算代入全过程</button>
+                </div>
+                <div class="tool-out-box" id="trigOutput"></div>
+                <div class="canvas-box-wrap"><canvas id="trigCanvas" width="600" height="190"></canvas></div>
+              </div>
+
+              <div class="math-subtool-card">
+                <h4>二、$0^\circ \sim 180^\circ$ 特殊角三角比速查表</h4>
+                <div class="table-scroll-wrap">
+                  <table class="table-compact">
+                    <thead>
+                      <tr><th>角度 $\theta$</th><th>$0^\circ$</th><th>$30^\circ$</th><th>$45^\circ$</th><th>$60^\circ$</th><th>$90^\circ$</th><th>$120^\circ$</th><th>$135^\circ$</th><th>$150^\circ$</th><th>$180^\circ$</th></tr>
+                    </thead>
+                    <tbody>
+                      <tr><td>$\sin \theta$</td><td>$0$</td><td>$\frac{1}{2}$</td><td>$\frac{\sqrt{2}}{2}$</td><td>$\frac{\sqrt{3}}{2}$</td><td>$1$</td><td>$\frac{\sqrt{3}}{2}$</td><td>$\frac{\sqrt{2}}{2}$</td><td>$\frac{1}{2}$</td><td>$0$</td></tr>
+                      <tr><td>$\cos \theta$</td><td>$1$</td><td>$\frac{\sqrt{3}}{2}$</td><td>$\frac{\sqrt{2}}{2}$</td><td>$\frac{1}{2}$</td><td>$0$</td><td>$-\frac{1}{2}$</td><td>$-\frac{\sqrt{2}}{2}$</td><td>$-\frac{\sqrt{3}}{2}$</td><td>$-1$</td></tr>
+                      <tr><td>$\tan \theta$</td><td>$0$</td><td>$\frac{\sqrt{3}}{3}$</td><td>$1$</td><td>$\sqrt{3}$</td><td>无定义</td><td>$-\sqrt{3}$</td><td>$-1$</td><td>$-\frac{\sqrt{3}}{3}$</td><td>$0$</td></tr>
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </div>
+
+            <!-- 单元工具 4：場合の数・確率 (P/C展开·余事象·条件概率·双骰子36格表) -->
+            <div class="calc-pane" id="toolPane-prob" hidden>
+              <div class="math-subtool-card">
+                <h4>一、排列数 ${}_n\mathrm{P}_r$、组合数 ${}_n\mathrm{C}_r$、余事象与条件概率</h4>
+                <div class="tool-row-inputs">
+                  <label>总数 $n$: <input type="number" id="probInputN" value="7" min="1" max="30" style="width:58px"></label>
+                  <label>选取 $r$: <input type="number" id="probInputR" value="3" min="0" max="30" style="width:58px"></label>
+                  <button class="btn btn-sm btn-primary" id="probCalcBtn" type="button">展示阶乘展开与公式</button>
+                </div>
+                <div class="tool-out-box" id="probOutput"></div>
+              </div>
+
+              <div class="math-subtool-card">
+                <div class="prob-tool-head">
+                  <h4>二、双骰子 36 格点选表（自动输出最简分数与余事象概率）</h4>
+                  <span class="prob-result-badge" id="diceProbResult">已选 0 / 36</span>
+                </div>
+                <div class="dice-presets">
+                  <button class="btn btn-xs" data-dice-preset="sum7" type="button">和 $= 7$</button>
+                  <button class="btn btn-xs" data-dice-preset="sumGe10" type="button">和 $\ge 10$</button>
+                  <button class="btn btn-xs" data-dice-preset="diffLe1" type="button">$|\text{差}| \le 1$</button>
+                  <button class="btn btn-xs" data-dice-preset="prodEven" type="button">积为偶数</button>
+                  <button class="btn btn-xs" data-dice-preset="doubles" type="button">两骰相同</button>
+                  <button class="btn btn-xs" data-dice-preset="clear" type="button">清空</button>
+                </div>
+                <div class="dice-grid" id="diceGrid"></div>
+              </div>
+            </div>
+
+            <!-- 单元工具 5：整数の性質 (辗转相除步骤·GCD/LCM·ax+by=c整数解·质因数分解·n进制转换) -->
+            <div class="calc-pane" id="toolPane-integers" hidden>
+              <div class="math-subtool-card">
+                <h4>一、辗转相除法 (GCD/LCM) 与一次不定方程 $ax + by = c$ 整数解</h4>
+                <div class="tool-row-inputs">
+                  <label>$a=$ <input type="number" id="intInputA" value="23" style="width:64px"></label>
+                  <label>$b=$ <input type="number" id="intInputB" value="7" style="width:64px"></label>
+                  <label>$c=$ <input type="number" id="intInputC" value="1" style="width:64px"></label>
+                  <button class="btn btn-sm btn-primary" id="intGcdBtn" type="button">输出互除步骤与通解</button>
+                </div>
+                <div class="tool-out-box" id="intGcdOut"></div>
+              </div>
+
+              <div class="math-subtool-card">
+                <h4>二、质因数分解、正约数个数/总和 与 $n$ 进制转换</h4>
+                <div class="tool-row-inputs">
+                  <label>十进制整数 $N$: <input type="number" id="intPrimeInput" value="360" min="2" max="999999" style="width:82px"></label>
+                  <label>转进制:
+                    <select id="intBaseSelect" class="select-xs">
+                      <option value="2">2 进制</option>
+                      <option value="3">3 进制</option>
+                      <option value="5">5 进制</option>
+                      <option value="8">8 进制</option>
+                      <option value="16">16 进制</option>
+                    </select>
+                  </label>
+                  <button class="btn btn-sm btn-primary" id="intPrimeBtn" type="button">分解与转换</button>
+                </div>
+                <div class="tool-out-box" id="intPrimeOut"></div>
+              </div>
+            </div>
+
+            <!-- 单元工具 6：データの分析 (五数概括·四分位数·方差·标准差·相关系数r·箱形图) -->
+            <div class="calc-pane" id="toolPane-stats" hidden>
+              <div class="math-subtool-card">
+                <h4>一、数据五数概括、方差/标准差、相关系数 $r$ 与箱形图 (Boxplot)</h4>
+                <div class="tool-col-inputs">
+                  <label>变量 $X$ 数据（逗号或空格分隔）：</label>
+                  <input type="text" id="statsDataInput" value="12, 15, 18, 22, 25, 28, 30, 32, 35" style="width:100%">
+                  <label style="margin-top:4px">变量 $Y$ 数据（可选，等长时自动计算协方差 $s_{xy}$ 与相关系数 $r$）：</label>
+                  <input type="text" id="statsDataInputY" value="10, 14, 16, 20, 24, 27, 29, 31, 36" style="width:100%">
+                  <button class="btn btn-sm btn-primary" id="statsCalcBtn" type="button" style="margin-top:6px">计算统计量并绘箱形图</button>
+                </div>
+                <div class="tool-out-box" id="statsOutput"></div>
+                <div class="canvas-box-wrap"><canvas id="statsBoxplotCanvas" width="640" height="120"></canvas></div>
+              </div>
+            </div>
+
+            <!-- 单元工具 7：GeoGebra 几何与函数图形计算器 -->
+            <div class="calc-pane" id="toolPane-geogebra" hidden>
+              <div class="ext-tool-bar">
+                <span>输入任意函数（如 <code>y = 3x^2 + 5x - 2</code>）或作几何圆：</span>
+                <a class="text-btn" href="https://www.geogebra.org/calculator" target="_blank" rel="noopener">新窗口全屏打开 GeoGebra &nearr;</a>
+              </div>
+              <div class="iframe-wrap">
+                <iframe id="geogebraFrame" title="GeoGebra 图形计算器" src="about:blank" data-src="https://www.geogebra.org/calculator?embed" loading="lazy" allowfullscreen></iframe>
+              </div>
+            </div>
+          </div>
+
+          <!-- 手写演算白板（默认常驻打开 · 友基M708 压感/侧键擦除 · 笔/荧光笔/橡皮/套索/撤销 · 暖纸底色） -->
+          <div class="wb-always-open" id="toolPane-board">
+            <div class="wb-toolbar">
+              <div class="wb-tool-group" role="group" aria-label="绘图工具">
+                <button class="wb-btn is-active" data-wb-mode="pen" type="button" title="手写画笔 (快捷键 P)">笔 (P)</button>
+                <button class="wb-btn" data-wb-mode="marker" type="button" title="半透明荧光笔 (快捷键 M)">荧光笔 (M)</button>
+                <button class="wb-btn" data-wb-mode="eraser" type="button" title="橡皮擦 (快捷键 E / 数位板笔侧键)">橡皮 (E)</button>
+                <button class="wb-btn" data-wb-mode="lasso" type="button" title="套索框选与移动 (快捷键 L)">套索 (L)</button>
+                <button class="wb-btn" data-wb-mode="pan" type="button" title="拖动无限画布 (或按住空格)">拖画布</button>
+              </div>
+
+              <div class="wb-width-group" role="group" aria-label="笔触粗细">
+                <button class="wb-btn is-active" data-wb-width="2" type="button" title="细 (快捷键 [ )">细</button>
+                <button class="wb-btn" data-wb-width="4" type="button" title="中">中</button>
+                <button class="wb-btn" data-wb-width="8" type="button" title="粗 (快捷键 ] )">粗</button>
+              </div>
+
+              <div class="wb-color-group" role="group" aria-label="画笔颜色">
+                <button class="wb-color is-active" data-wb-color="#1e293b" style="background:#1e293b" type="button" title="深黑"></button>
+                <button class="wb-color" data-wb-color="#d97757" style="background:#d97757" type="button" title="赤陶橙"></button>
+                <button class="wb-color" data-wb-color="#2563eb" style="background:#2563eb" type="button" title="辅助蓝"></button>
+              </div>
+
+              <div class="wb-bg-group">
+                <select id="wbBgSelect" class="select-xs" aria-label="白板底纸">
+                  <option value="grid">方格草稿纸</option>
+                  <option value="axes">x-y 直角坐标纸</option>
+                  <option value="lined">横线笔记纸</option>
+                  <option value="blank">空白暖纸色</option>
+                </select>
+                <button class="wb-btn" id="wbUndoBtn" type="button" title="撤销 (Ctrl+Z)">撤销</button>
+                <button class="wb-btn" id="wbRedoBtn" type="button" title="重做 (Ctrl+Y)">重做</button>
+                <button class="wb-btn" id="wbClearBtn" type="button" title="清空当前题白板">清屏</button>
+              </div>
+
+              <span class="wb-stylus-badge" title="友基M708 压感驱动就绪">友基M708 压感/侧键已就绪</span>
+            </div>
+
+            <div class="wb-canvas-wrap" id="wbCanvasWrap">
+              <canvas id="wbCanvas" width="820" height="560"></canvas>
+            </div>
+            <div class="wb-bottom-hint">快捷键：<code>P</code> 笔 · <code>M</code> 荧光笔 · <code>E</code>/笔侧键 橡皮 · <code>L</code> 套索 · <code>[ ]</code> 粗细 · 按住<code>空格</code>拖画布 · <code>Ctrl+Z/Y</code> 撤销重做</div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ═══════════════════════════════════════════════════════════════════
+         视图 3：专注刷题视图（一题一屏、快捷键支持、三行极简解析）
+         ═══════════════════════════════════════════════════════════════════ -->
+    <section class="view" id="view-study">
+      <article class="card study-card">
+        <div class="study-top-bar">
+          <button class="btn btn-sm" id="exitStudyBtn" type="button">&larr; 返回看板</button>
+          <div class="study-progress-wrap">
+            <span class="study-progress-text" id="studyProgressText">1 / 20</span>
+            <div class="study-progress-bar"><span id="studyProgressFill" style="width:5%"></span></div>
+          </div>
+          <div class="study-top-actions">
+            <button class="btn btn-sm btn-lang" id="studyLangToggleBtn" type="button" title="点击切换中/日双语">中文译文：开</button>
+          </div>
+          <div class="study-meta-tags">
+            <span class="tag" id="studyDeckTag">政治</span>
+            <span class="tag tag-subtle" id="studyTopicTag">統治機構</span>
+            <span class="tag" id="studySourceTag">未核实</span>
+          </div>
+        </div>
+
+        <div class="study-audit-banner" id="studyAuditBanner" hidden></div>
+
+        <!-- 题目正文 -->
+        <h2 class="study-question" id="studyQuestion"></h2>
+        <div class="study-question-sub" id="studyQuestionSub" hidden></div>
+
+        <!-- 答题前辅助栏：1行破题提示 / 查看原卷 / 加入数学待讲 -->
+        <div class="study-helper-bar">
+          <button class="btn btn-sm" id="studyHintBtn" type="button">看破题提示</button>
+          <button class="btn btn-sm" id="studyRefBtn" type="button">查本节速查表</button>
+          <button class="btn btn-sm btn-unsure" id="studyUnsureBtn" type="button" title="不确定此题答案，按答错计入错题本">不确定（进错题）</button>
+          <button class="btn btn-sm" id="studyPaperBtn" type="button" hidden>看真题原卷</button>
+          <button class="btn btn-sm" id="studyBookmarkMathBtn" type="button" hidden>留给今晚讲数学</button>
+        </div>
+
+        <div class="study-hint-box" id="studyHintBox" hidden></div>
+
+        <div class="study-paper-box" id="studyPaperBox" hidden>
+          <img id="studyPaperImg" src="" alt="真题原卷扫描图">
+        </div>
+
+        <!-- EJU 数学マーク式填空面板 (type === 'mark') -->
+        <div class="study-mark-panel" id="studyMarkPanel" hidden>
+          <div class="mark-tip-bar">
+            <span>【EJU マーク式 填空】在对应方框内填入数字或负号，可通过键盘直接输入或点击屏幕数字键（数位板/鼠标）：</span>
+          </div>
+          <div class="mark-slots-wrap" id="studyMarkSlots"></div>
+          <div class="mark-keypad-dock">
+            <div class="mark-keypad" id="studyMarkKeypad">
+              <button class="btn mark-key" data-key="1" type="button">1</button>
+              <button class="btn mark-key" data-key="2" type="button">2</button>
+              <button class="btn mark-key" data-key="3" type="button">3</button>
+              <button class="btn mark-key" data-key="4" type="button">4</button>
+              <button class="btn mark-key" data-key="5" type="button">5</button>
+              <button class="btn mark-key" data-key="6" type="button">6</button>
+              <button class="btn mark-key" data-key="7" type="button">7</button>
+              <button class="btn mark-key" data-key="8" type="button">8</button>
+              <button class="btn mark-key" data-key="9" type="button">9</button>
+              <button class="btn mark-key" data-key="-" type="button">-</button>
+              <button class="btn mark-key" data-key="0" type="button">0</button>
+              <button class="btn mark-key mark-key-del" data-act="del" type="button">⌫ 退格</button>
+            </div>
+            <div class="mark-actions">
+              <button class="btn btn-sm" id="studyMarkClearBtn" type="button">清空</button>
+              <button class="btn btn-primary" id="studyMarkSubmitBtn" type="button">提交答题 (Enter)</button>
+            </div>
+          </div>
+        </div>
+
+        <!-- 选项区（四选一 MCQ，支持键盘 1/2/3/4 快选） -->
+        <div class="study-choices" id="studyChoices"></div>
+
+        <!-- 问答卡（Flip）正面按钮 -->
+        <div class="study-flip-bar" id="studyFlipBar" hidden>
+          <button class="btn btn-primary" id="studyRevealFlipBtn" type="button">显示答案 (Space)</button>
+        </div>
+
+        <!-- 极简三行解析区（作答后显示：选项逐项解析 + 核心解析 + 考点直达） -->
+        <div class="study-feedback" id="studyFeedback" hidden>
+          <div class="feedback-status" id="feedbackStatus"></div>
+          <div class="feedback-answer" id="feedbackAnswer" hidden></div>
+          <div class="feedback-opt-expl" id="feedbackOptExpl" hidden></div>
+          <div class="feedback-expl" id="feedbackExpl"></div>
+          <div class="feedback-trap" id="feedbackTrap" hidden></div>
+          <div class="feedback-kp-dock" id="feedbackKpDock" hidden>
+            <button class="btn btn-sm btn-primary" id="studyKpLinkBtn" type="button">查看本题核心考点速查</button>
+          </div>
+        </div>
+
+        <!-- 底部评分/下一题控制栏 -->
+        <div class="study-Rate-bar" id="studyRateBar" hidden>
+          <div class="rate-buttons" id="rateButtonsGroup">
+            <button class="btn btn-danger-soft" data-rate="again" type="button">没掌握 · 进错题 (1)</button>
+            <button class="btn" data-rate="hard" type="button">模糊 · 明天复习 (2)</button>
+            <button class="btn btn-ok" data-rate="good" type="button">掌握 · 下一题 (Space / 3)</button>
+          </div>
+          <button class="btn btn-sm" id="studyNextVariantBtn" type="button">练一道同考点题</button>
+        </div>
+
+        <div class="kbd-hint">快捷键：选择题按 <code>1-4</code> · 填空题按 <code>0-9/-</code> · <code>Enter/Space</code> 提交与下一题</div>
+      </article>
+    </section>
+
+    <!-- ═══════════════════════════════════════════════════════════════════
+         视图 4：错题本（独立页面、原题 1 次 ＋ 同考点变式 1 次移出、支持一键重刷）
+         ═══════════════════════════════════════════════════════════════════ -->
+    <section class="view" id="view-wrong">
+      <article class="card">
+        <div class="section-head">
+          <div>
+            <h2 class="section-title">错题本与待攻克清单</h2>
+            <p class="section-sub">做错/不确定题目自动收录；原题答对 1 次 ＋ 同考点变形题答对 1 次才移出，杜绝死记选项位置</p>
+          </div>
+          <div class="console-actions">
+            <button class="btn btn-primary" id="wrongPracticeAllBtn" type="button">立即重刷全部错题</button>
+            <button class="btn" id="wrongPracticeBunsoBtn" type="button">只刷文综错题</button>
+            <button class="btn" id="wrongPracticeMathBtn" type="button">去讲题台过数学错题</button>
+          </div>
+        </div>
+
+        <div class="cat-tabs" id="wrongFilterTabs">
+          <button class="cat-tab is-active" data-wrong-filter="all" type="button">全部错题</button>
+          <button class="cat-tab" data-wrong-filter="bunso" type="button">文综错题</button>
+          <button class="cat-tab" data-wrong-filter="math" type="button">数学错题</button>
+          <button class="cat-tab" data-wrong-filter="bookmark" type="button">今晚数学待讲题单</button>
+        </div>
+
+        <div id="wrongBookList" class="wrong-book-list"></div>
+      </article>
+    </section>
+
+    <!-- ═══════════════════════════════════════════════════════════════════
+         视图 5：17天冲刺方案（100% 与刷题数据、错题本、各科掌握率实时联动）
+         ═══════════════════════════════════════════════════════════════════ -->
+    <section class="view" id="view-plan">
+      <!-- 今日任务实时联动看板 -->
+      <article class="card">
+        <div class="section-head">
+          <div>
+            <h2 class="section-title">今日冲刺目标（与刷题实时联动）</h2>
+            <p class="section-sub" id="planTodayDateLabel">刷题后下方进度条自动增长并完成打卡，也可手动勾选</p>
+          </div>
+          <span class="tag" id="planTodaySummaryTag">今日完成 0 / 4 项</span>
+        </div>
+
+        <div class="linked-tasks-grid" id="linkedTasksGrid"></div>
+      </article>
+
+      <!-- 17天四阶段动态进度表（实时计算每个阶段对应牌组的掌握题数与百分比） -->
+      <article class="card">
+        <div class="section-head">
+          <div>
+            <h2 class="section-title">17 天四阶段决战路线图（2026-10-22 &rarr; 11-08）</h2>
+            <p class="section-sub">每个阶段直接绑定题库各模块掌握率，点击右侧按钮直接抽取该阶段未掌握题目</p>
+          </div>
+        </div>
+
+        <div class="phases-linked-list" id="phasesLinkedList"></div>
+      </article>
+
+      <!-- 近 7 天刷题量趋势与模考记录 -->
+      <div class="plan-bottom-grid">
+        <article class="card">
+          <h3 class="section-title">近 7 天学习记录</h3>
+          <div class="chart-bars" id="historyChart"></div>
+        </article>
+
+        <article class="card">
+          <div class="section-head">
+            <h3 class="section-title">模考 / 真题自测记录</h3>
+            <div class=" console-actions">
+              <button class="btn btn-sm" id="exportDataBtn" type="button">导出备份</button>
+              <label class="btn btn-sm">导入备份<input id="importDataInput" type="file" accept="application/json" hidden></label>
+            </div>
+          </div>
+          <form class="mock-form" id="mockForm">
+            <select id="mockSubject" class="select-compact">
+              <option value="総合科目">総合科目 (200分)</option>
+              <option value="数学コース1">数学コース1 (200分)</option>
+            </select>
+            <input type="number" id="mockScore" placeholder="得分" min="0" max="200" required>
+            <input type="text" id="mockNote" placeholder="备注（如：2024年第1回）">
+            <button class="btn btn-sm btn-primary" type="submit">记录</button>
+          </form>
+          <div id="mockList" class="mock-list"></div>
+        </article>
+      </div>
+    </section>
+
+    <!-- ═══════════════════════════════════════════════════════════════════
+         视图 6：阶段 1 答案与题面正确性核验报告（SymPy 验算 + 正解表比对 + 20题原卷并排抽检）
+         ═══════════════════════════════════════════════════════════════════ -->
+    <section class="view" id="view-audit">
+      <!-- 阶段 1 总览指标条 -->
+      <div class="audit-summary-strip" id="auditSummaryStrip"></div>
+
+      <!-- 阶段 1 子视图切换 -->
+      <article class="card">
+        <div class="section-head">
+          <div>
+            <h2 class="section-title">阶段 1：答案与题面正确性核验台</h2>
+            <p class="section-sub">全部数学题均经 SymPy 独立重算并与官方〈数学〉コース1 正解表逐空比对；不一致项原样保留供您裁定，未核实题目不计入掌握率</p>
+          </div>
+          <div class="cat-tabs" id="auditMainTabs">
+            <button class="cat-tab is-active" data-audit-tab="table" type="button">1. 官方正解表 &amp; SymPy 对照表 (34题)</button>
+            <button class="cat-tab" data-audit-tab="sbs" type="button">2. 原卷截图 | 网页题面 并排抽检 (20题)</button>
+            <button class="cat-tab" data-audit-tab="unverified" type="button">3. 未核实清单 (204) &amp; 已删自编题 (95)</button>
+          </div>
+        </div>
+
+        <!-- 子面板 1：正解表 & SymPy 对照表 -->
+        <div id="auditPane-table">
+          <div class="audit-filter-bar">
+            <span class="steps-label">筛选状态：</span>
+            <button class="btn btn-xs btn-primary" data-audit-filter="all" type="button">全部数学题 (34)</button>
+            <button class="btn btn-xs" data-audit-filter="discrepancy" type="button">三者不一致 · 待您裁定 (12)</button>
+            <button class="btn btn-xs" data-audit-filter="verified" type="button">核对一致 · 已验证 (22)</button>
+          </div>
+          <div class="audit-table-wrap">
+            <table class="audit-table">
+              <thead>
+                <tr>
+                  <th style="width:120px">题号 / ID</th>
+                  <th style="width:170px">官方出处 (source)</th>
+                  <th>题库答案</th>
+                  <th>正解表答案</th>
+                  <th>SymPy 独立验算</th>
+                  <th style="width:88px">是否一致</th>
+                  <th style="width:270px">诊断说明（不一致项待裁定）</th>
+                </tr>
+              </thead>
+              <tbody id="auditTableBody"></tbody>
+            </table>
+          </div>
+        </div>
+
+        <!-- 子面板 2：20 题「原卷截图 | 网页题面」并排对照页 -->
+        <div id="auditPane-sbs" hidden>
+          <div class="audit-filter-bar">
+            <span class="steps-label">抽检范围：</span>
+            <button class="btn btn-xs btn-primary" data-sbs-filter="sample20" type="button">抽检 20 题（含全部 12 道待裁定题 + 8 道一致真题）</button>
+            <button class="btn btn-xs" data-sbs-filter="discrepancy" type="button">只看 12 道题面/答案不一致题</button>
+          </div>
+          <div class="sbs-list" id="auditSbsList"></div>
+        </div>
+
+        <!-- 子面板 3：未核实清单 & 已删除自编题报告 -->
+        <div id="auditPane-unverified" hidden>
+          <div class="audit-unverified-grid" id="auditUnverifiedContent"></div>
+        </div>
+      </article>
+    </section>
+  </main>
+
+  <!-- 速查表弹窗（刷题中点击“查本节速查表”时弹出，无需离开当前题） -->
+  <div class="modal-backdrop" id="refModal" hidden>
+    <div class="modal-box">
+      <div class="modal-head">
+        <h3 id="refModalTitle">考点速查</h3>
+        <button class="text-btn" id="closeRefModalBtn" type="button">关闭 (Esc)</button>
+      </div>
+      <div class="modal-body" id="refModalBody"></div>
+    </div>
+  </div>
+
+  <!-- 云同步设置弹窗 -->
+  <div class="modal-backdrop" id="syncModal" hidden>
+    <div class="modal-box modal-sm">
+      <div class="modal-head">
+        <h3>多设备云同步 &amp; ATRI 提醒</h3>
+        <button class="text-btn" id="closeSyncModalBtn" type="button">关闭</button>
+      </div>
+      <div class="modal-body">
+        <p class="section-sub">电脑与手机填写同一个同步口令即可实时同步刷题进度、错题本与待讲题单。</p>
+        <div class="sync-form-row">
+          <input type="text" id="syncTokenInput" placeholder="输入同步口令（如 nayuki）">
+          <button class="btn btn-primary" id="syncNowBtn" type="button">立即同步</button>
+        </div>
+        <p class="stat-hint" id="syncStatusText">当前口令：nayuki</p>
+      </div>
+    </div>
+  </div>
+
+  <script src="./bank.js"></script>
+  <script src="./bank2.js"></script>
+  <script src="./bank3.js"></script>
+  <script src="./bank_math_real.js"></script>
+  <script src="./bank_bunso_extra.js"></script>
+  <script src="./knowledge.js"></script>
+  <script src="./papers_manifest.js"></script>
+  <script src="./mindmap.js"></script>
+  <script src="./stage1_audit_data.js"></script>
+    <script src="./whiteboard.js"></script>
+  <script src="./math_tools.js"></script>
+  <script src="./app.js"></script>
+</body>
+</html>
