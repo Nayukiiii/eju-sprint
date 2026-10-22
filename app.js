@@ -3,8 +3,6 @@
 
   const EXAM_AT = new Date('2026-11-08T00:00:00+09:00');
   const STORAGE_KEY = 'eju-sprint-state-v1';
-  const SYNC_KEY = 'eju-sync-token';
-  const SYNC_LAST_KEY = 'eju-sync-last';
   const THEME_KEY = 'eju-theme-mode';
   const INTERVALS = [0, 1, 2, 4, 7, 12];
   const DAILY_TARGET = 40;
@@ -73,6 +71,7 @@
 
   function saveState() {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+    window.dispatchEvent(new CustomEvent('eju-state-saved'));
   }
 
   function renderMathIn(el) {
@@ -1010,7 +1009,6 @@
     });
     if (state.history.length > 4000) state.history = state.history.slice(-4000);
     saveState();
-    scheduleAutoSync();
   }
 
   function advanceStudyCard(rateGrade) {
@@ -1795,53 +1793,22 @@
     window.scrollTo({top: 0, behavior: 'smooth'});
   }
 
-  // ─── Cloud Sync (Preserves /api/sync and /api/report compatibility) ───
-  function getSyncToken() {
-    let tok = localStorage.getItem(SYNC_KEY);
-    if (!tok) {
-      tok = 'nayuki';
-      localStorage.setItem(SYNC_KEY, tok);
-    }
-    return tok;
-  }
-
-  let syncTimer = null;
-  function scheduleAutoSync() {
-    clearTimeout(syncTimer);
-    syncTimer = setTimeout(() => syncWithServer(false), 2500);
-  }
-
-  async function syncWithServer(manual = false) {
-    const token = getSyncToken();
-    try {
-      const res = await fetch(`/api/sync?token=${encodeURIComponent(token)}`, {
-        method: 'POST',
-        headers: {'Content-Type': 'application/json'},
-        body: JSON.stringify({token, state, updatedAt: Date.now()})
-      });
-      if (res.ok) {
-        const data = await res.json();
-        if (data && data.state && data.state.progress) {
-          // Merge remote progress safely
-          for (const [cid, rp] of Object.entries(data.state.progress)) {
-            const lp = state.progress[cid];
-            if (!lp || (rp.updatedAt || 0) > (lp.updatedAt || 0)) {
-              state.progress[cid] = rp;
-            }
-          }
-          if (data.state.bookmarks) {
-            state.bookmarks = {...(data.state.bookmarks || {}), ...(state.bookmarks || {})};
-          }
-          saveState();
-          renderTopBarAndDashboard();
-        }
-        localStorage.setItem(SYNC_LAST_KEY, new Date().toLocaleTimeString('zh-CN', {hour: '2-digit', minute: '2-digit'}));
-        if (manual) $('#syncStatusText').textContent = `同步成功（${localStorage.getItem(SYNC_LAST_KEY)}）`;
-      }
-    } catch (_) {
-      if (manual) $('#syncStatusText').textContent = '离线模式：进度已保存在本地浏览器';
-    }
-  }
+  // ─── Bridge for sync.js (study-group sync): read state, apply remote changes, refresh views ───
+  window.EJU_APP = {
+    getState: () => state,
+    // Apply a remote change without re-announcing it as a local edit
+    applyRemote(mutate) {
+      mutate(state);
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+      renderTopBarAndDashboard();
+      if (currentRoute === 'today') renderDeckProgressGrid();
+      else if (currentRoute === 'wrong') renderWrongBook();
+      else if (currentRoute === 'plan') renderLinkedPlan();
+    },
+    currentRoute: () => currentRoute,
+    currentTutorCardId: () => (currentRoute === 'math' ? tutorCardsList[tutorCardIdx]?.id || null : null),
+    openTutorCard: id => openMathTutorWithCard(id),
+  };
 
   // ─── Event Listeners & Initialization ───
   function bindEvents() {
@@ -2227,17 +2194,6 @@
       }
     });
 
-    $('#syncBtn').addEventListener('click', () => {
-      $('#syncTokenInput').value = getSyncToken();
-      $('#syncModal').hidden = false;
-    });
-    $('#closeSyncModalBtn').addEventListener('click', () => { $('#syncModal').hidden = true; });
-    $('#syncNowBtn').addEventListener('click', () => {
-      const val = $('#syncTokenInput').value.trim();
-      if (val) localStorage.setItem(SYNC_KEY, val);
-      syncWithServer(true);
-    });
-
     // Stage 1 Audit tabs & filters
     $$('#auditMainTabs [data-audit-tab]').forEach(btn => {
       btn.addEventListener('click', () => {
@@ -2277,7 +2233,6 @@
     renderStage1AuditView();
     renderTutorCard();
     renderMathIn(document.body);
-    syncWithServer(false);
 
     try {
       const params = new URLSearchParams(window.location.search);

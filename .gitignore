@@ -2,3 +2,9 @@
 Thumbs.db
 *.log
 *.tar.gz
+
+# sync server data
+*.db
+*.db-wal
+*.db-shm
+__pycache__/
