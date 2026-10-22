@@ -1281,7 +1281,7 @@
         modules: [
           {label: '时事热点', filter: c => c.deck === '時事'},
           {label: '旧地名与首都', filter: c => c.deck === '旧地名'},
-          {label: '数学公式总复盘', filter: c => c.deck === '公式'}
+          {label: '数学真题总复盘', filter: c => /数/.test(c.deck)}
         ]
       }
     ];
@@ -1330,10 +1330,10 @@
           <div class="mini-bar mini-bar-ok"><span style="width:${pct}%"></span></div>
           <div class="phase-mod-foot">
             <span>${hasVerified ? `已核实掌握 ${mCount} / ${verifiedPool.length} 题` : `${pool.length} 题`}</span>
-            <button class="text-btn" type="button">${unmastered.length ? `去练习 (${unmastered.length})` : '复习本组'}</button>
+            ${pool.length ? `<button class="text-btn" type="button">${unmastered.length ? `去练习 (${unmastered.length})` : '复习本组'}</button>` : ''}
           </div>
         `;
-        modBox.querySelector('button').addEventListener('click', () => {
+        modBox.querySelector('button')?.addEventListener('click', () => {
           startCustomPoolSession(unmastered.length ? unmastered : pool, mod.label, 20);
         });
         grid.appendChild(modBox);
