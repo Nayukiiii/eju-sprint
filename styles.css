@@ -2650,3 +2650,25 @@ input[type="number"] {
     text-align: center;
   }
 }
+
+/* Math step-by-step derivation layout (分步演算) */
+.ms-head {
+  font-weight: 700;
+  color: var(--primary);
+  margin: 2px 0 4px;
+}
+.ms-line {
+  margin: 1px 0;
+}
+.ms-indent {
+  padding-left: 1em;
+}
+.ms-cont {
+  padding-left: 1.6em;
+}
+.ms-indent.ms-cont {
+  padding-left: 2.6em;
+}
+.ms-gap {
+  height: 10px;
+}

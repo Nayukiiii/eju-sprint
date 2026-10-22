@@ -815,6 +815,59 @@
     return lines.slice(0, 4).join('\n');
   }
 
+  // Split a line on `sep` only outside $...$ math segments
+  function splitOutsideMath(line, sep) {
+    const parts = [];
+    let cur = '';
+    let inMath = false;
+    for (let i = 0; i < line.length; i++) {
+      if (line[i] === '$') inMath = !inMath;
+      if (!inMath && line.startsWith(sep, i)) {
+        parts.push(cur);
+        cur = '';
+        i += sep.length - 1;
+        continue;
+      }
+      cur += line[i];
+    }
+    parts.push(cur);
+    return parts;
+  }
+
+  // Lay out a math derivation step by step: 【步骤】 headings stand out, and
+  // chained "⇒" / "=" calculations are broken onto their own lines.
+  function formatMathStepsHtml(text) {
+    const out = [];
+    const push = (cls, content) => out.push(`<div class="${cls}">${escapeHtml(content)}</div>`);
+    for (const rawLine of String(text || '').trim().split('\n')) {
+      const line = rawLine.trim();
+      if (!line) {
+        out.push('<div class="ms-gap"></div>');
+        continue;
+      }
+      if (/^【[^】]*】$/.test(line)) {
+        push('ms-head', line);
+        continue;
+      }
+      const baseCls = /^\s{2,}/.test(rawLine) ? 'ms-line ms-indent' : 'ms-line';
+      splitOutsideMath(line, '⇒').forEach((piece, pi) => {
+        const seg = piece.trim();
+        if (!seg) return;
+        // Long "a = b = c = d" chains: put each "= ..." on its own line
+        const eqParts = splitOutsideMath(seg, ' = ');
+        const lines = eqParts.length >= 4
+          ? [eqParts[0] + ' = ' + eqParts[1], ...eqParts.slice(2).map(p => '= ' + p.trim())]
+          : [seg];
+        lines.forEach((l, li) => {
+          const prefix = pi > 0 && li === 0 ? '⇒ ' : '';
+          const cls = pi > 0 || li > 0 ? `${baseCls} ms-cont` : baseCls;
+          push(cls, prefix + l.trim());
+        });
+      });
+    }
+    return out.join('');
+  }
+
   // ─── Countdown & Top Stats ───
   function getTodayStats() {
     const today = localDateKey();
@@ -1391,7 +1444,12 @@
       optExplBox.innerHTML = '';
     }
 
-    explEl.textContent = getConciseExpl(activeCard);
+    if (isMathCard(activeCard)) {
+      // Math derivations must be shown in full, one step per line
+      explEl.innerHTML = formatMathStepsHtml(activeCard.expl || '按基本公式代入即可。');
+    } else {
+      explEl.textContent = getConciseExpl(activeCard);
+    }
     if (activeCard.trap) {
       trapEl.hidden = false;
       trapEl.textContent = `防坑提醒：${activeCard.trap}`;
@@ -1985,7 +2043,7 @@
     $$('.step-reveal-btn').forEach(b => b.classList.remove('is-open'));
 
     hintBox.textContent = `【破题公式】${getCardHint(card)}`;
-    explBox.textContent = card.expl || '按基本公式代入即可。';
+    explBox.innerHTML = formatMathStepsHtml(card.expl || '按基本公式代入即可。');
     const ansStr = card.type === 'mark'
       ? `マーク式正解：${card.ansSummary || (card.blanks || []).map(b => `${b.label}=${b.ans}`).join(', ')}`
       : card.type === 'mcq'
