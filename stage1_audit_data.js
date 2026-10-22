@@ -3,7 +3,7 @@ window.EJU_STAGE1_AUDIT = {
   "generatedAt": "2026-10-22",
   "summary": {
     "totalCards": 238,
-    "deletedSelfInvented": 95,
+    "deletedSelfInvented": 72,
     "deletedBreakdown": [
       {
         "file": "bank.js",
@@ -16,11 +16,6 @@ window.EJU_STAGE1_AUDIT = {
         "desc": "内置自编数学基础问答与四选一卡 (math-001~010)"
       },
       {
-        "file": "bank3.js",
-        "count": 23,
-        "desc": "自编 2026 时事预测四选一卡 (news-001~023)"
-      },
-      {
         "file": "bank_bunso_extra.js",
         "count": 23,
         "desc": "自编文综扩展变形卡 (pol-ext-*, trt-ext-*, geo-ext-*, eco-ext-*, his-ext-*, soc-ext-*)"
@@ -31,7 +26,7 @@ window.EJU_STAGE1_AUDIT = {
     "mathAdaptedCount": 6,
     "verifiedConsistentCount": 34,
     "discrepancyCount": 0,
-    "unverifiedBunsoCount": 204
+    "unverifiedBunsoCount": 227
   },
   "mathAuditTable": [
     {

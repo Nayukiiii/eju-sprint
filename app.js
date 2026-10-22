@@ -1746,7 +1746,7 @@
     container.innerHTML = `
       <div class="audit-panel-block">
         <h3 class="section-title">一、已彻底删除的自编题与自编选项清单（共 ${audit.summary.deletedSelfInvented} 题）</h3>
-        <p class="section-sub">严格按阶段 1 第 5 条要求，删除所有自编数学题、自编公式卡、自编 2026 时事预测题与自编文综扩展题；保留的 6 道数学变形题均已标明“改编自 20XX第X回 問X”。</p>
+        <p class="section-sub">严格按阶段 1 第 5 条要求，删除所有自编数学题、自编公式卡与自编文综扩展题（2025–2026 时事题已经网络报道核对后恢复，标“未核实”）；保留的 6 道数学变形题均已标明“改编自 20XX第X回 問X”。</p>
         <div class="audit-deleted-box">${deletedHtml}</div>
       </div>
 
