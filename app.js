@@ -1009,6 +1009,7 @@
     });
     if (state.history.length > 4000) state.history = state.history.slice(-4000);
     saveState();
+    scheduleAtriReport();
   }
 
   function advanceStudyCard(rateGrade) {
@@ -1793,6 +1794,98 @@
     window.scrollTo({top: 0, behavior: 'smooth'});
   }
 
+  // ─── ATRI 督促上报：把今天的刷题数报给 eju-watch 的 /api/report（ATRI 只读这里） ───
+  // Contract of the eju-watch service: POST JSON with the 同步码 in `token`; 403 on a wrong code.
+  // Dates are Tokyo dates because ATRI checks days[<Tokyo today>].done against 40.
+  const ATRI_TOKEN_KEY = 'eju-sync-token';
+  const ATRI_STATUS_KEY = 'eju-atri-status';
+  const tokyoDateKey = ms => new Intl.DateTimeFormat('en-CA', {timeZone: 'Asia/Tokyo'}).format(new Date(ms));
+  let atriTimer = null;
+
+  function getAtriToken() {
+    try { return localStorage.getItem(ATRI_TOKEN_KEY) || ''; } catch (_) { return ''; }
+  }
+
+  function buildAtriReport() {
+    const today = tokyoDateKey(Date.now());
+    const myName = window.EJU_SYNC?.myName?.();
+    // Only my own answers count: in a study group the shared history also holds the partner's
+    const mine = state.history.filter(h => (!h.by || h.by === myName) && tokyoDateKey(h.at || Date.parse(h.date)) === today);
+    const wrongByDeck = {};
+    let correct = 0;
+    let fuzzy = 0;
+    let wrong = 0;
+    for (const h of mine) {
+      if (h.grade === 'again') {
+        wrong++;
+        const deck = cards.find(c => c.id === h.id)?.deck;
+        if (deck) wrongByDeck[deck] = (wrongByDeck[deck] || 0) + 1;
+      } else if (h.grade === 'hard') {
+        fuzzy++;
+      } else {
+        correct++;
+      }
+    }
+    const weakDeck = Object.entries(wrongByDeck).sort((a, b) => b[1] - a[1])[0]?.[0] || '';
+    return {
+      date: today,
+      target: DAILY_TARGET,
+      done: mine.length,
+      correct,
+      fuzzy,
+      wrong,
+      due: cards.filter(isDue).length,
+      fresh: cards.filter(c => !getProgress(c).reps).length,
+      solid: cards.filter(c => (getProgress(c).box || 0) >= 3).length,
+      total: cards.length,
+      weakDeck: weakDeck.slice(0, 20),
+    };
+  }
+
+  function setAtriStatus(text) {
+    try { localStorage.setItem(ATRI_STATUS_KEY, text); } catch (_) {}
+    const el = $('#atriStatusText');
+    if (el) el.textContent = text;
+  }
+
+  async function sendAtriReport({keepalive = false} = {}) {
+    clearTimeout(atriTimer);
+    const token = getAtriToken();
+    if (!token) return;
+    const report = buildAtriReport();
+    try {
+      const res = await fetch('/api/report', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({token, ...report}),
+        keepalive,
+      });
+      const time = new Date().toLocaleTimeString('zh-CN', {hour: '2-digit', minute: '2-digit'});
+      if (res.ok) setAtriStatus(`ATRI 已收到：今天 ${report.done} / ${report.target}（${time}）`);
+      else if (res.status === 403) setAtriStatus('ATRI 同步码不对，请重新填写。');
+      else setAtriStatus(`上报失败（HTTP ${res.status}），下次答题时再试。`);
+    } catch (_) {
+      setAtriStatus('网络不通，下次答题时再上报。');
+    }
+  }
+
+  // Same rhythm as the old frontend: 2.5 s after the last answer, coalescing a burst of answers
+  function scheduleAtriReport() {
+    clearTimeout(atriTimer);
+    atriTimer = setTimeout(() => sendAtriReport(), 2500);
+  }
+
+  // Old links like https://eju.utautai.org/#sync=<同步码> still set the code
+  function adoptAtriTokenFromHash() {
+    const params = new URLSearchParams(location.hash.slice(1));
+    const code = params.get('sync');
+    if (!code) return;
+    try { localStorage.setItem(ATRI_TOKEN_KEY, code); } catch (_) {}
+    params.delete('sync');
+    const rest = params.toString();
+    history.replaceState(null, '', location.pathname + location.search + (rest ? `#${rest}` : ''));
+  }
+
   // ─── Bridge for sync.js (study-group sync): read state, apply remote changes, refresh views ───
   window.EJU_APP = {
     getState: () => state,
@@ -2223,6 +2316,26 @@
     });
   }
 
+  function bindAtriReporting() {
+    adoptAtriTokenFromHash();
+    const input = $('#atriTokenInput');
+    const status = $('#atriStatusText');
+    try { if (status) status.textContent = localStorage.getItem(ATRI_STATUS_KEY) || ''; } catch (_) {}
+    if (input) input.placeholder = getAtriToken() ? '已设置（重新填写可更换）' : '填写 ATRI 同步码';
+    $('#atriSaveBtn')?.addEventListener('click', () => {
+      const code = input.value.trim();
+      if (!code) return;
+      try { localStorage.setItem(ATRI_TOKEN_KEY, code); } catch (_) {}
+      input.value = '';
+      input.placeholder = '已设置（重新填写可更换）';
+      sendAtriReport();
+    });
+    document.addEventListener('visibilitychange', () => {
+      sendAtriReport({keepalive: document.visibilityState === 'hidden'});
+    });
+    sendAtriReport();
+  }
+
   function init() {
     bindEvents();
     window.EJU_WHITEBOARD?.init();
@@ -2257,4 +2370,5 @@
   }
 
   init();
+  bindAtriReporting();
 })();
