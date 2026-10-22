@@ -3606,3 +3606,94 @@ h1, h2, h3, h4,
   font-size: 13px;
   min-width: 0;
 }
+
+/* ═══ Less text: short nav labels and keyboard hints only where they help ═══ */
+.nav-short { display: none; }
+.kbd { opacity: 0.6; font-weight: 400; }
+
+@media (max-width: 760px) {
+  /* Top bar on one line; the countdown lives in the hero */
+  .topbar-inner { flex-wrap: nowrap; padding: 8px 14px; }
+  .countdown-badge { display: none; }
+  .top-actions { gap: 12px; flex-shrink: 0; }
+
+  /* Five short tabs that fit the width */
+  .main-nav { display: flex; overflow-x: auto; scrollbar-width: none; }
+  .main-nav::-webkit-scrollbar { display: none; }
+  .nav-tab { flex: 1 0 auto; justify-content: center; padding: 10px 6px; font-size: 14px; }
+  .nav-full { display: none; }
+  .nav-short { display: inline; }
+  .nav-badge { font-size: 10px; padding: 0 5px; }
+
+  .kbd, .kbd-hint { display: none; }
+}
+
+@media (max-width: 560px) {
+  .shell { padding-left: 12px; padding-right: 12px; }
+
+  /* Hero: countdown + one big button; the wrong count is in the stats below */
+  .hero-focus-card { grid-template-columns: 64px 1fr; gap: 12px 14px; padding: 14px; }
+  .hero-illust { min-height: 64px; padding: 6px; }
+  .hero-focus-sub, .hero-focus-cta .hero-focus-sub { display: none; }
+  .hero-focus-card > .hero-focus-wrong { display: none; }
+  .hero-focus-val { font-size: 30px; }
+  .btn-hero-main { width: 100%; padding: 14px; font-size: 17px; }
+
+  /* Stats: label + number only */
+  .stat-hint, .dashboard-strip .stat-sub { display: none; }
+  .dashboard-strip .stat-item { padding: 10px 2px 2px; }
+  .dashboard-strip .stat-val { font-size: 22px; }
+  .stat-link { font-size: 12px; }
+
+  /* Subjects: name + count, three per row */
+  .section-sub { display: none; }
+  .deck-progress-grid { grid-template-columns: repeat(3, 1fr) !important; gap: 8px; }
+  .deck-chip { padding: 8px; }
+  .deck-chip-top { flex-direction: column; align-items: flex-start; gap: 0; font-size: 13.5px; margin-bottom: 4px; }
+  .deck-chip .jp-sub, .deck-chip-sub:empty { display: none; }
+  .deck-chip-sub { font-size: 11px; margin-top: 2px; }
+  .console-header { flex-direction: column; align-items: stretch; gap: 10px; }
+  .console-actions { display: flex; gap: 8px; }
+  .console-actions #startSmartBtn { flex: 1; }
+
+  /* Reference list: titles only, filters in one scrolling row */
+  .kp-desc { display: none; }
+  .search-inline { min-width: 0; max-width: none; width: 100%; }
+  .cat-tabs { flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; }
+  .cat-tabs > * { flex-shrink: 0; }
+
+  /* Study view */
+  .study-top-bar { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+  .study-progress-wrap { flex: 1; min-width: 0; }
+  .study-meta-tags { width: 100%; display: flex; gap: 6px; flex-wrap: wrap; }
+  .study-question { font-size: 18px; }
+  .study-helper-bar { gap: 6px; }
+  .rate-buttons { display: grid; grid-template-columns: 1fr 1fr 1.3fr; gap: 8px; width: 100%; }
+  .rate-buttons .btn { padding: 12px 6px; font-size: 15px; }
+  .study-Rate-bar { flex-direction: column; align-items: stretch; gap: 8px; }
+  .choice-btn { padding: 12px; font-size: 15.5px; }
+  .opt-expl-heading { font-size: 13px; }
+}
+
+@media (max-width: 760px) {
+  #navAuditBadge, #navPlanBadge { display: none; }
+}
+
+/* Wrong book: the question column must be allowed to shrink; on phones the buttons go underneath */
+.wrong-item-main { min-width: 0; }
+.wrong-item-actions { flex-wrap: wrap; justify-content: flex-end; }
+
+@media (max-width: 560px) {
+  .wrong-item { flex-direction: column; align-items: stretch; gap: 10px; padding: 12px; }
+  .wrong-item-actions { justify-content: flex-start; }
+  .wrong-item-actions .btn { flex: 1 0 auto; }
+}
+
+@media (max-width: 560px) {
+  .wb-stylus-badge { display: none; }
+  .tutor-header-bar { gap: 8px; }
+  .tutor-nav-center { width: 100%; justify-content: space-between; }
+  .tutor-steps-bar { gap: 6px; }
+  .tutor-verdict-bar { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+  .tutor-verdict-bar .btn { padding: 12px 6px; font-size: 15px; }
+}
