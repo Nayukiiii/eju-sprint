@@ -211,6 +211,56 @@
     return lines.slice(0, 4).join('\n');
   }
 
+  // ─── Formula typesetting: turn the formula runs of a mixed CJK/ASCII line into KaTeX ───
+  const MATH_OPS = /[=+\-−×÷≦≧≤≥<>^√/²³°⇒]/;
+  const MATH_RUN = /[A-Za-z0-9 +\-−×÷=≦≧≤≥<>()\[\]{}^_\\/.,'²³√π°⇒|]+/g;
+  const MATH_JOIN = /\$([^$]*)\$(\s*)([぀-ヿ一-鿿]{1,10})(\s*)\$(\)[^$]*)\$/;
+
+  function unicodeMathToLatex(run) {
+    return run
+      .replace(/−/g, '-')
+      .replace(/×/g, '\\times ')
+      .replace(/÷/g, '\\div ')
+      .replace(/[≦≤]/g, '\\le ')
+      .replace(/[≧≥]/g, '\\ge ')
+      .replace(/⇒/g, '\\Rightarrow ')
+      .replace(/²/g, '^2').replace(/³/g, '^3')
+      .replace(/°/g, '^\\circ ')
+      .replace(/√\s*(\[[A-Z]+\]|\d+|[a-zA-Z])/g, '\\sqrt{$1}')
+      .replace(/√/g, '\\surd ')
+      .replace(/(?<![\w.\\{}])(\d+)\/(\d+)(?![\w.])/g, '\\tfrac{$1}{$2}')
+      .replace(/\[([A-Z]+)\]/g, '\\boxed{\\text{$1}}')
+      .replace(/π/g, '\\pi ')
+      .replace(/(?<![\\A-Za-z])(sin|cos|tan|log)(?![a-z])/g, '\\$1 ');
+  }
+
+  function mathifyLine(line) {
+    // Existing $ islands are already LaTeX; drop the delimiters so they join the surrounding run
+    const wrapped = String(line).replace(/\$/g, '').replace(MATH_RUN, run => {
+      const lead = run.match(/^[\s.,]*/)[0];
+      const trail = run.match(/[\s.,]*$/)[0];
+      const core = run.slice(lead.length, run.length - trail.length);
+      if (/^[a-z]$/.test(core)) return `${lead}$${core}$${trail}`;
+      if (!core || !MATH_OPS.test(core) || !/[A-Za-z0-9]/.test(core) || /^[A-Za-z]+$/.test(core)) return run;
+      return `${lead}$${unicodeMathToLatex(core)}$${trail}`;
+    });
+    // A short CJK word inside an open parenthesis, e.g. "−(x前面的数) ÷ …", stays inside the formula
+    const openParens = t => (t.match(/\(/g) || []).length - (t.match(/\)/g) || []).length;
+    let out = wrapped;
+    let prev;
+    do {
+      prev = out;
+      out = out.replace(MATH_JOIN, (m, a, s1, word, s2, b) => (openParens(a) > 0 ? `$${a}\\text{${word}}${b}$` : m));
+    } while (out !== prev);
+    return out;
+  }
+
+  // Short math notes (hint, trap): keep line breaks, typeset formulas
+  function formatMathInlineHtml(text) {
+    return String(text || '').trim().split('\n')
+      .map(l => `<div class="ms-line">${escapeHtml(mathifyLine(l.trim()))}</div>`).join('');
+  }
+
   // Split a line on `sep` only outside $...$ math segments
   function splitOutsideMath(line, sep) {
     const parts = [];
@@ -234,7 +284,7 @@
   // chained "⇒" / "=" calculations are broken onto their own lines.
   function formatMathStepsHtml(text) {
     const out = [];
-    const push = (cls, content) => out.push(`<div class="${cls}">${escapeHtml(content)}</div>`);
+    const push = (cls, content) => out.push(`<div class="${cls}">${escapeHtml(cls === 'ms-head' ? content : mathifyLine(content))}</div>`);
     for (const rawLine of String(text || '').trim().split('\n')) {
       const line = rawLine.trim();
       if (!line) {
@@ -857,7 +907,8 @@
     }
     if (activeCard.trap) {
       trapEl.hidden = false;
-      trapEl.textContent = `防坑提醒：${activeCard.trap}`;
+      if (isMathCard(activeCard)) trapEl.innerHTML = `<div class="ms-head">防坑提醒</div>${formatMathInlineHtml(activeCard.trap)}`;
+      else trapEl.textContent = `防坑提醒：${activeCard.trap}`;
     } else {
       trapEl.hidden = true;
     }
@@ -1447,14 +1498,15 @@
     ansBox.hidden = true;
     $$('.step-reveal-btn').forEach(b => b.classList.remove('is-open'));
 
-    hintBox.textContent = `【破题公式】${getCardHint(card)}`;
+    hintBox.innerHTML = `<div class="ms-head">破题公式</div>${formatMathInlineHtml(getCardHint(card))}`;
     explBox.innerHTML = formatMathStepsHtml(card.expl || '按基本公式代入即可。');
     const ansStr = card.type === 'mark'
       ? `マーク式正解：${card.ansSummary || (card.blanks || []).map(b => `${b.label}=${b.ans}`).join(', ')}`
       : card.type === 'mcq'
       ? `选项 (${card.a + 1})：${card.choices[card.a]}`
       : card.back;
-    ansBox.textContent = `【最终答案】${ansStr}${card.trap ? `\n【易错提醒】${card.trap}` : ''}`;
+    ansBox.innerHTML = `<div class="ms-head">最终答案</div><div class="ms-line">${escapeHtml(ansStr)}</div>`
+      + (card.trap ? `<div class="ms-gap"></div><div class="ms-head">易错提醒</div>${formatMathInlineHtml(card.trap)}` : '');
 
     renderMathIn($('#view-math'));
 
