@@ -88,6 +88,13 @@
     } catch (_) {}
   }
 
+  // Tutor mark boxes stay empty until the answer step is opened
+  function setTutorBlanksRevealed(show) {
+    $$('#tutorChoicesBox .tutor-mark-slot-cell').forEach(cell => {
+      cell.textContent = show ? cell.dataset.ans : '';
+    });
+  }
+
   function getProgress(cardOrId) {
     const id = typeof cardOrId === 'string' ? cardOrId : cardOrId.id;
     return state.progress[id] || {box: 0, due: 0, reps: 0, lapses: 0, wrongStreak: 0, inWrongBook: false, lastGrade: null};
@@ -552,16 +559,12 @@
     // Question text with bilingual toggle support (default ON)
     const qCn = activeCard.q_cn;
     const qJp = activeCard.q;
-    if (showChinese && qCn) {
-      $('#studyQuestion').textContent = qCn;
-      if (qJp && qJp !== qCn) {
-        $('#studyQuestionSub').hidden = false;
-        $('#studyQuestionSub').textContent = `日文原题：${qJp}`;
-      } else {
-        $('#studyQuestionSub').hidden = true;
-      }
+    // The exam is in Japanese: the original is always the main text, Chinese is an aid below it
+    $('#studyQuestion').textContent = qJp || qCn;
+    if (showChinese && qCn && qCn !== qJp) {
+      $('#studyQuestionSub').hidden = false;
+      $('#studyQuestionSub').textContent = `中文译文：${qCn}`;
     } else {
-      $('#studyQuestion').textContent = qJp;
       $('#studyQuestionSub').hidden = true;
     }
 
@@ -612,12 +615,13 @@
       choicesBox.hidden = false;
       flipBar.hidden = true;
       markPanel.hidden = true;
-      const choicesList = (showChinese && Array.isArray(activeCard.choices_cn)) ? activeCard.choices_cn : activeCard.choices;
-      choicesList.forEach((choiceText, idx) => {
+      const cnList = Array.isArray(activeCard.choices_cn) ? activeCard.choices_cn : [];
+      activeCard.choices.forEach((choiceText, idx) => {
         const btn = document.createElement('button');
         btn.type = 'button';
         btn.className = 'choice-btn';
-        btn.innerHTML = `<span class="choice-key">${idx + 1}</span><span>${choiceText}</span>`;
+        const cn = showChinese && cnList[idx] && cnList[idx] !== choiceText ? `<span class="choice-cn">${cnList[idx]}</span>` : '';
+        btn.innerHTML = `<span class="choice-key">${idx + 1}</span><span class="choice-body"><span class="choice-jp">${choiceText}</span>${cn}</span>`;
         btn.addEventListener('click', () => handleAnswerMcq(idx, btn));
         choicesBox.appendChild(btn);
       });
@@ -636,6 +640,8 @@
     markCells = [];
     markValues = [];
     activeCellIdx = 0;
+    const emptyTip = $('#studyMarkEmptyTip');
+    if (emptyTip) emptyTip.hidden = true;
 
     const blanks = Array.isArray(card.blanks) && card.blanks.length ? card.blanks : [{key: 'A', label: '[A]', ans: '0', len: 1}];
     let cellGlobalIdx = 0;
@@ -695,6 +701,8 @@
     }
     if (!/^[0-9\-]$/.test(char)) return;
     markValues[activeCellIdx] = char;
+    const emptyTip = $('#studyMarkEmptyTip');
+    if (emptyTip) emptyTip.hidden = true;
     const el = document.getElementById(`markCell_${activeCellIdx}`);
     if (el) el.textContent = char;
     if (activeCellIdx < markCells.length - 1) {
@@ -704,6 +712,12 @@
 
   function handleMarkSubmit() {
     if (answered || !activeCard || activeCard.type !== 'mark') return;
+    // An empty sheet is not an attempt: ask for input instead of logging a wrong answer
+    if (!markValues.some(v => v !== undefined && v !== '')) {
+      const tip = $('#studyMarkEmptyTip');
+      if (tip) tip.hidden = false;
+      return;
+    }
     answered = true;
     let allCorrect = true;
     const blanks = activeCard.blanks || [];
@@ -755,8 +769,11 @@
       else if (btn === clickedBtn) btn.classList.add('is-wrong');
     });
 
-    const choicesList = (showChinese && Array.isArray(activeCard.choices_cn)) ? activeCard.choices_cn : activeCard.choices;
-    showStudyFeedback(isCorrect, choicesList[activeCard.a]);
+    showStudyFeedback(isCorrect, mcqAnswerText(activeCard));
+  }
+
+  function mcqAnswerText(card) {
+    return `(${card.a + 1}) ${card.choices[card.a]}`;
   }
 
   function handleAnswerUnsure() {
@@ -770,9 +787,8 @@
     } else if (activeCard.type === 'mark') {
       revealMarkAnswers();
     }
-    const choicesList = (showChinese && Array.isArray(activeCard.choices_cn)) ? activeCard.choices_cn : activeCard.choices;
     const ansText = activeCard.type === 'mcq'
-      ? choicesList[activeCard.a]
+      ? mcqAnswerText(activeCard)
       : (activeCard.ansSummary || activeCard.back);
     showStudyFeedback(false, ansText, true); // isUnsure = true
   }
@@ -823,7 +839,7 @@
           ${activeCard.optExpl.map((txt, idx) => `
             <div class="opt-expl-item ${idx === activeCard.a ? 'is-correct-opt' : 'is-wrong-opt'}">
               <span class="opt-expl-num">(${idx + 1})</span>
-              <span class="opt-expl-text">${txt}</span>
+              <span class="opt-expl-text">${String(txt).replace(/^选项\(\d\)\s*/, '')}</span>
             </div>
           `).join('')}
         </div>
@@ -1386,13 +1402,13 @@
       const blanksWrap = document.createElement('div');
       blanksWrap.className = 'tutor-mark-blanks-preview';
       blanksWrap.innerHTML = `
-        <div class="mark-tip-bar" style="margin-bottom:8px">【EJU マーク式 填空】原卷栏位与正解对照：</div>
+        <div class="mark-tip-bar" style="margin-bottom:8px">【EJU マーク式 填空】原卷栏位（点「3. 看最终答案」后显示正解）：</div>
         <div class="mark-slots-wrap" style="margin-bottom:8px">
           ${card.blanks.map(b => `
             <div class="mark-slot-box" style="padding:6px 10px">
               <div class="mark-slot-label">${b.label}</div>
               <div class="mark-slot-inputs">
-                ${Array.from({length: b.len || (b.ans ? String(b.ans).length : 1)}).map((_, i) => `<span class="mark-cell-input tutor-mark-slot-cell" style="width:32px;height:36px;font-size:16px">${(b.ans && String(b.ans)[i]) || '?'}</span>`).join('')}
+                ${Array.from({length: b.len || (b.ans ? String(b.ans).length : 1)}).map((_, i) => `<span class="mark-cell-input tutor-mark-slot-cell" data-ans="${(b.ans && String(b.ans)[i]) || '?'}" style="width:32px;height:36px;font-size:16px"></span>`).join('')}
               </div>
             </div>
           `).join('')}
@@ -2032,6 +2048,7 @@
         if (!box) return;
         box.hidden = !box.hidden;
         btn.classList.toggle('is-open', !box.hidden);
+        if (step === 'ans') setTutorBlanksRevealed(!box.hidden);
         renderMathIn(box);
       });
     });
@@ -2044,6 +2061,7 @@
         }
       });
       $$('.step-reveal-btn').forEach(b => b.classList.add('is-open'));
+      setTutorBlanksRevealed(true);
     });
 
     // Tutor verdict buttons (linked to progress & 17-day plan)

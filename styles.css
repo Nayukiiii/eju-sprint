@@ -2672,3 +2672,32 @@ input[type="number"] {
 .ms-gap {
   height: 10px;
 }
+
+.mark-empty-tip {
+  margin: 4px 0 10px;
+  font-size: 13px;
+  color: var(--warn);
+}
+
+.choice-body {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  text-align: left;
+}
+
+.choice-cn {
+  font-size: 0.86em;
+  color: var(--text-muted);
+}
+
+/* Keep the tutor header usable on phones */
+.tutor-nav-left {
+  min-width: 0;
+  max-width: 100%;
+}
+
+#tutorUnifiedSelect {
+  min-width: 0;
+  max-width: 100%;
+}
