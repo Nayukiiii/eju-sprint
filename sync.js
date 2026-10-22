@@ -629,6 +629,8 @@
     }
   }
 
+  window.EJU_SYNC = {myName: () => me?.member?.name || null};
+
   function init() {
     bindUi();
     handleHash();
