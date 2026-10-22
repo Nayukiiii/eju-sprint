@@ -428,13 +428,13 @@
           <span>${def.label} <small class="jp-sub">${DECK_JP_SUB[def.id] || ''}</small></span>
           ${hasVerified
             ? `<span class="deck-chip-pct">${pct}%</span>`
-            : `<span class="tag tag-source-unverified" style="font-size:11px;padding:1px 6px">未核实</span>`}
+            : `<span class="deck-chip-pct">${total} 题</span>`}
         </div>
         <div class="mini-bar mini-bar-ok"><span style="width:${pct}%"></span></div>
         <div class="deck-chip-sub">${
           hasVerified
             ? `已核实掌握 ${mastered}/${verifiedPool.length}${unverifiedInPool ? ` · 未核实 ${unverifiedInPool}` : ''}${wrong ? ` · 错题 ${wrong}` : ''}`
-            : `未核实 ${total} 题（不计入掌握率）${wrong ? ` · 错题 ${wrong}` : ''}`
+            : `未核实 · 不计入掌握率${wrong ? ` · 错题 ${wrong}` : ''}`
         }</div>
       `;
       btn.addEventListener('click', () => {
@@ -1333,18 +1333,20 @@
       const cnt = state.history.filter(h => h.date === key).length;
       counts.push({label: key.slice(5), cnt});
     }
-    const maxCnt = Math.max(20, ...counts.map(c => c.cnt));
-    for (const item of counts) {
+    const maxCnt = Math.max(DAILY_TARGET, ...counts.map(c => c.cnt));
+    // A dashed tick at the daily goal in every track, so each day reads against the target
+    const targetPct = Math.round((DAILY_TARGET / maxCnt) * 100);
+    counts.forEach((item, i) => {
       const hPct = Math.round((item.cnt / maxCnt) * 100);
       const col = document.createElement('div');
-      col.className = 'chart-col';
+      col.className = i === counts.length - 1 ? 'chart-col is-today' : 'chart-col';
       col.innerHTML = `
         <span class="chart-val">${item.cnt}</span>
-        <div class="chart-bar-wrap"><div class="chart-bar-fill" style="height:${hPct}%"></div></div>
-        <span class="chart-day">${item.label}</span>
+        <div class="chart-bar-wrap"><i class="chart-target-tick" style="bottom:${targetPct}%"></i><div class="chart-bar-fill" style="height:${hPct}%"></div></div>
+        <span class="chart-day">${i === counts.length - 1 ? '今天' : item.label}</span>
       `;
       chart.appendChild(col);
-    }
+    });
   }
 
   function renderMocksList() {

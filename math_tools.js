@@ -256,7 +256,7 @@
     const h = canvas.height;
     ctx.clearRect(0, 0, w, h);
 
-    ctx.fillStyle = '#faf9f5';
+    ctx.fillStyle = '#F8F6F1';
     ctx.fillRect(0, 0, w, h);
 
     const pad = 44;
@@ -265,14 +265,14 @@
     const rightVal = center + dist + 2;
     const toScreenX = v => pad + ((v - leftVal) / (rightVal - leftVal)) * (w - 2 * pad);
 
-    ctx.strokeStyle = '#64748b';
+    ctx.strokeStyle = '#7A756B';
     ctx.lineWidth = 2;
     ctx.beginPath();
     ctx.moveTo(pad - 15, lineY);
     ctx.lineTo(w - pad + 15, lineY);
     ctx.stroke();
 
-    ctx.fillStyle = '#64748b';
+    ctx.fillStyle = '#7A756B';
     ctx.beginPath();
     ctx.moveTo(w - pad + 15, lineY);
     ctx.lineTo(w - pad + 5, lineY - 5);
@@ -288,7 +288,7 @@
       ctx.lineTo(sx, lineY + 6);
       ctx.stroke();
 
-      ctx.fillStyle = '#1e293b';
+      ctx.fillStyle = '#23304A';
       ctx.font = '12px sans-serif';
       ctx.textAlign = 'center';
       ctx.fillText(String(Math.round(v * 100) / 100), sx, lineY + 22);
@@ -296,9 +296,9 @@
 
     const sxMin = toScreenX(minX);
     const sxMax = toScreenX(maxX);
-    ctx.strokeStyle = '#d97757';
+    ctx.strokeStyle = '#D67052';
     ctx.lineWidth = 3.5;
-    ctx.fillStyle = 'rgba(217, 119, 87, 0.16)';
+    ctx.fillStyle = 'rgba(214, 112, 82, 0.16)';
 
     if (type === 'le') {
       ctx.fillRect(sxMin, lineY - 18, sxMax - sxMin, 18);
@@ -321,7 +321,7 @@
       ctx.stroke();
     }
 
-    ctx.fillStyle = '#d97757';
+    ctx.fillStyle = '#D67052';
     [sxMin, sxMax].forEach(sx => {
       ctx.beginPath();
       ctx.arc(sx, lineY, 5, 0, Math.PI * 2);
@@ -486,7 +486,7 @@
     const h = canvas.height;
     ctx.clearRect(0, 0, w, h);
 
-    ctx.fillStyle = '#faf9f5';
+    ctx.fillStyle = '#F8F6F1';
     ctx.fillRect(0, 0, w, h);
 
     const ox = w / 2 - 20;
@@ -500,7 +500,7 @@
     for (let y = oy % unit; y <= h; y += unit) { ctx.moveTo(0, y); ctx.lineTo(w, y); }
     ctx.stroke();
 
-    ctx.strokeStyle = '#94a3b8';
+    ctx.strokeStyle = '#A39E93';
     ctx.lineWidth = 1.8;
     ctx.beginPath();
     ctx.moveTo(0, oy); ctx.lineTo(w, oy);
@@ -510,12 +510,12 @@
     // Domain [m, n] band
     const sxM = ox + m * unit;
     const sxN = ox + n * unit;
-    ctx.fillStyle = 'rgba(217, 119, 87, 0.1)';
+    ctx.fillStyle = 'rgba(214, 112, 82, 0.1)';
     ctx.fillRect(Math.min(sxM, sxN), 0, Math.abs(sxN - sxM), h);
 
     // Axis of symmetry x = p
     const sxP = ox + p * unit;
-    ctx.strokeStyle = '#2563eb';
+    ctx.strokeStyle = '#2F4A7A';
     ctx.lineWidth = 1.5;
     ctx.setLineDash([5, 4]);
     ctx.beginPath();
@@ -525,7 +525,7 @@
     ctx.setLineDash([]);
 
     // Full parabola
-    ctx.strokeStyle = '#94a3b8';
+    ctx.strokeStyle = '#A39E93';
     ctx.lineWidth = 2;
     ctx.beginPath();
     let started = false;
@@ -541,7 +541,7 @@
     ctx.stroke();
 
     // Highlighted interval [m, n] on parabola
-    ctx.strokeStyle = '#d97757';
+    ctx.strokeStyle = '#D67052';
     ctx.lineWidth = 3.8;
     ctx.beginPath();
     started = false;
@@ -558,7 +558,7 @@
     // Vertex dot & label
     const vx = ox + p * unit;
     const vy = oy - q * unit;
-    ctx.fillStyle = '#2563eb';
+    ctx.fillStyle = '#2F4A7A';
     ctx.beginPath();
     ctx.arc(vx, vy, 5, 0, Math.PI * 2);
     ctx.fill();
@@ -655,7 +655,7 @@
     const h = canvas.height;
     ctx.clearRect(0, 0, w, h);
 
-    ctx.fillStyle = '#faf9f5';
+    ctx.fillStyle = '#F8F6F1';
     ctx.fillRect(0, 0, w, h);
 
     const pad = 42;
@@ -680,19 +680,19 @@
     const cy = offsetY - rawCy * scale;
 
     // Angle arc at A
-    ctx.strokeStyle = '#d97757';
+    ctx.strokeStyle = '#D67052';
     ctx.lineWidth = 2;
     ctx.beginPath();
     ctx.arc(ax, ay, 24, -radA, 0);
     ctx.stroke();
-    ctx.fillStyle = '#d97757';
+    ctx.fillStyle = '#D67052';
     ctx.font = 'bold 12px sans-serif';
     ctx.fillText(`${degA}°`, ax + 28, ay - 6);
 
     // Triangle ABC
-    ctx.strokeStyle = '#1e293b';
+    ctx.strokeStyle = '#23304A';
     ctx.lineWidth = 2.5;
-    ctx.fillStyle = 'rgba(217, 119, 87, 0.09)';
+    ctx.fillStyle = 'rgba(214, 112, 82, 0.09)';
     ctx.beginPath();
     ctx.moveTo(ax, ay);
     ctx.lineTo(bx, by);
@@ -702,14 +702,14 @@
     ctx.stroke();
 
     // Vertices labels
-    ctx.fillStyle = '#1e293b';
+    ctx.fillStyle = '#23304A';
     ctx.font = 'bold 13px sans-serif';
     ctx.fillText('A', ax - 16, ay + 6);
     ctx.fillText('B', bx + 8, by + 6);
     ctx.fillText('C', cx - 6, cy - 10);
 
     // Side labels
-    ctx.fillStyle = '#475569';
+    ctx.fillStyle = '#5C574E';
     ctx.font = '12.5px sans-serif';
     ctx.fillText(`c = ${c}`, (ax + bx) / 2 - 14, ay + 18);
     ctx.fillText(`b = ${b}`, (ax + cx) / 2 - 36, (ay + cy) / 2);
@@ -1044,7 +1044,7 @@
     const h = canvas.height;
     ctx.clearRect(0, 0, w, h);
 
-    ctx.fillStyle = '#faf9f5';
+    ctx.fillStyle = '#F8F6F1';
     ctx.fillRect(0, 0, w, h);
 
     const pad = 44;
@@ -1054,7 +1054,7 @@
     const y = h / 2 - 4;
     const boxH = 42;
 
-    ctx.strokeStyle = '#1e293b';
+    ctx.strokeStyle = '#23304A';
     ctx.lineWidth = 2;
     ctx.beginPath();
     ctx.moveTo(toX(min), y);
@@ -1067,20 +1067,20 @@
     ctx.lineTo(toX(max), y + 12);
     ctx.stroke();
 
-    ctx.fillStyle = 'rgba(217, 119, 87, 0.14)';
+    ctx.fillStyle = 'rgba(214, 112, 82, 0.14)';
     ctx.fillRect(toX(Q1), y - boxH / 2, toX(Q3) - toX(Q1), boxH);
-    ctx.strokeStyle = '#d97757';
+    ctx.strokeStyle = '#D67052';
     ctx.lineWidth = 2;
     ctx.strokeRect(toX(Q1), y - boxH / 2, toX(Q3) - toX(Q1), boxH);
 
-    ctx.strokeStyle = '#2563eb';
+    ctx.strokeStyle = '#2F4A7A';
     ctx.lineWidth = 3;
     ctx.beginPath();
     ctx.moveTo(toX(med), y - boxH / 2);
     ctx.lineTo(toX(med), y + boxH / 2);
     ctx.stroke();
 
-    ctx.fillStyle = '#1e293b';
+    ctx.fillStyle = '#23304A';
     ctx.font = '12px sans-serif';
     ctx.textAlign = 'center';
     ctx.fillText(`Min: ${min}`, toX(min), y + 34);

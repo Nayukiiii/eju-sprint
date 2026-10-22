@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-  <meta name="theme-color" content="#f5f4ef">
+  <meta name="theme-color" content="#F3F0E9">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <title>EJU 冲刺工作台</title>
   <link rel="manifest" href="./manifest.webmanifest">
@@ -12,7 +12,7 @@
   <!-- 暖纸衬线与正文双语字体 -->
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;600;700&family=Noto+Sans+SC:wght@400;500;600;700&family=Noto+Serif+SC:wght@600;700&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;600;700&family=Noto+Sans+SC:wght@400;500;600;700&family=Noto+Serif+SC:wght@500;600;700&family=Noto+Serif+JP:wght@500;600;700&family=Source+Serif+4:opsz,wght@8..60,500;8..60,600;8..60,700&display=swap" rel="stylesheet">
   <!-- KaTeX 数学公式渲染支持 (同步加载确保公式100%即时渲染) -->
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.css" crossorigin="anonymous">
   <script src="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.js" crossorigin="anonymous"></script>
@@ -56,6 +56,20 @@
     <section class="view is-active" id="view-today">
       <!-- 阶段4首屏核心三要素：考试倒计时 · 开始今日任务主按钮 · 错题待消数 -->
       <article class="card hero-focus-card" id="heroFocusCard">
+        <!-- The road to exam day: one restrained ink line drawing on a terracotta block -->
+        <div class="hero-illust" aria-hidden="true">
+          <svg viewBox="0 0 160 160" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M14 128c18-6 30-1 44-9s14-22 30-27 26 3 34-9 2-24 14-33" />
+            <path d="M14 136c22-4 34 1 49-7 13-7 16-20 31-24 13-4 23 2 31-8" opacity=".55" />
+            <path d="M8 146c30-3 62 1 92-2s36-2 52-6" opacity=".45" />
+            <path d="M136 50V22" />
+            <path d="M136 23c7 2 11-2 17 1-5 3-10 7-17 5" />
+            <circle cx="58" cy="119" r="1.8" fill="currentColor" stroke="none" />
+            <circle cx="88" cy="92" r="1.8" fill="currentColor" stroke="none" />
+            <circle cx="122" cy="80" r="1.8" fill="currentColor" stroke="none" />
+            <path d="M24 98c6-10 13-12 20-8M30 104c5-6 9-7 14-5" opacity=".5" />
+          </svg>
+        </div>
         <div class="hero-focus-item">
           <span class="hero-focus-label">2026年11月8日 EJU 考试倒计时</span>
           <strong class="hero-focus-val" id="heroCountdownVal">17 天</strong>
@@ -490,9 +504,9 @@
               </div>
 
               <div class="wb-color-group" role="group" aria-label="画笔颜色">
-                <button class="wb-color is-active" data-wb-color="#1e293b" style="background:#1e293b" type="button" title="深黑"></button>
-                <button class="wb-color" data-wb-color="#d97757" style="background:#d97757" type="button" title="赤陶橙"></button>
-                <button class="wb-color" data-wb-color="#2563eb" style="background:#2563eb" type="button" title="辅助蓝"></button>
+                <button class="wb-color is-active" data-wb-color="#23304A" style="background:#23304A" type="button" title="深黑"></button>
+                <button class="wb-color" data-wb-color="#D67052" style="background:#D67052" type="button" title="赤陶橙"></button>
+                <button class="wb-color" data-wb-color="#2F4A7A" style="background:#2F4A7A" type="button" title="辅助蓝"></button>
               </div>
 
               <div class="wb-bg-group">
@@ -685,6 +699,7 @@
       <div class="plan-bottom-grid">
         <article class="card">
           <h3 class="section-title">近 7 天学习记录</h3>
+          <div class="chart-legend"><span class="lg lg-today">今天</span><span class="lg lg-past">此前</span><span class="lg lg-target">每日目标 40 题</span></div>
           <div class="chart-bars" id="historyChart"></div>
         </article>
 
