@@ -1,4 +1,4 @@
-const CACHE = 'eju-sprint-stage3-v2';
+const CACHE = 'eju-sprint-stage3-v3';
 const ASSETS = [
   './',
   './index.html',
@@ -10,6 +10,7 @@ const ASSETS = [
   './bank3.js',
   './bank_math_real.js',
   './bank_bunso_extra.js',
+  './bank_core.js',
   './knowledge.js',
   './papers_manifest.js',
   './mindmap.js',

@@ -11,7 +11,7 @@
 
   // Drawing state
   let currentMode = 'pen'; // 'pen' | 'marker' | 'eraser' | 'lasso'
-  let currentColor = '#1e293b'; // '#1e293b' (黑) | '#d97757' (赤陶) | '#2563eb' (蓝)
+  let currentColor = '#23304A'; // '#23304A' (黑) | '#D67052' (赤陶) | '#2F4A7A' (蓝)
   let currentWidth = 2; // 2 (细) | 4 (中) | 8 (粗)
   let currentBg = 'grid'; // 'blank' | 'lined' | 'grid' | 'axes'
   let isDrawing = false;
@@ -419,7 +419,7 @@
 
   function renderBackground(bgType) {
     const isDark = document.documentElement.getAttribute('data-theme') === 'dark';
-    ctx.fillStyle = isDark ? '#262624' : '#faf9f5';
+    ctx.fillStyle = isDark ? '#262624' : '#F8F6F1';
     ctx.fillRect(0, 0, canvas.width, canvas.height);
 
     if (bgType === 'blank') return;
@@ -435,7 +435,7 @@
 
     const gridColor = isDark ? '#363632' : '#ebe6dc';
     const lineColor = isDark ? '#3a3a36' : '#e4dfd3';
-    const axisColor = isDark ? '#78756e' : '#94a3b8';
+    const axisColor = isDark ? '#78756e' : '#A39E93';
 
     if (bgType === 'lined') {
       ctx.strokeStyle = lineColor;
@@ -515,7 +515,7 @@
     ctx.save();
     ctx.lineCap = 'round';
     ctx.lineJoin = 'round';
-    ctx.strokeStyle = isSelected ? '#d97757' : str.color;
+    ctx.strokeStyle = isSelected ? '#D67052' : str.color;
 
     // Highlighter / Marker mode: draw as a single continuous path with uniform translucency
     if (str.mode === 'marker') {
@@ -569,7 +569,7 @@
     ctx.save();
     const isDark = document.documentElement.getAttribute('data-theme') === 'dark';
     ctx.fillStyle = isDark ? '#30302d' : '#ffffff';
-    ctx.strokeStyle = isSelected ? '#d97757' : (isDark ? '#4a4a45' : '#dcd6c8');
+    ctx.strokeStyle = isSelected ? '#D67052' : (isDark ? '#4a4a45' : '#dcd6c8');
     ctx.lineWidth = isSelected ? 2 : 1.5;
     ctx.shadowColor = 'rgba(0,0,0,0.06)';
     ctx.shadowBlur = 8;
@@ -583,11 +583,11 @@
     ctx.stroke();
 
     ctx.shadowBlur = 0;
-    ctx.fillStyle = '#d97757';
+    ctx.fillStyle = '#D67052';
     ctx.font = 'bold 12.5px "Noto Sans SC", sans-serif';
     ctx.fillText(stamp.title || '【贴图】', stamp.x + 12, stamp.y + 22);
 
-    ctx.fillStyle = isDark ? '#ece9e0' : '#1e293b';
+    ctx.fillStyle = isDark ? '#ece9e0' : '#23304A';
     ctx.font = '13.5px "Noto Sans SC", "Noto Sans JP", sans-serif';
     const lines = stamp.lines || [];
     lines.forEach((line, i) => {
@@ -693,7 +693,7 @@
 
   function renderLassoPolygon() {
     ctx.save();
-    ctx.strokeStyle = '#d97757';
+    ctx.strokeStyle = '#D67052';
     ctx.lineWidth = 1.5;
     ctx.setLineDash([5, 5]);
     ctx.beginPath();
@@ -707,7 +707,7 @@
 
   function renderSelectionBoundingBox() {
     ctx.save();
-    ctx.strokeStyle = '#d97757';
+    ctx.strokeStyle = '#D67052';
     ctx.lineWidth = 1.5;
     ctx.setLineDash([4, 4]);
     ctx.strokeRect(
@@ -937,8 +937,8 @@
     selectedStrokes = [];
     selectionBox = null;
     // When switching to highlighter (marker), if color is dark black, switch to warm terracotta orange so highlighter is vibrant
-    if (mode === 'marker' && currentColor === '#1e293b') {
-      setColor('#d97757');
+    if (mode === 'marker' && currentColor === '#23304A') {
+      setColor('#D67052');
     }
     document.querySelectorAll('[data-wb-mode]').forEach(b => {
       b.classList.toggle('is-active', b.dataset.wbMode === mode);

@@ -30,617 +30,6 @@
   // Built-in core cards + external banks (Stage 2: 100% 四选一マーク式 + 中日双语 + 逐项解析)
   const cards = [
     ...(window.EJU_BANK || []),
-    {
-        "id": "pol-001",
-        "source": "未核实",
-        "deck": "政治",
-        "topic": "民主政治",
-        "type": "mcq",
-        "q": "「法の精神」を著し、三権分立を主張した思想家は誰か。",
-        "choices": [
-            "ロック",
-            "ルソー",
-            "モンテスキュー",
-            "ホッブズ"
-        ],
-        "a": 2,
-        "expl": "孟德斯鸠在《论法的精神》中系统论述立法、行政、司法三权分立；洛克主张自然权利与抵抗权（《政府论》）；卢梭主张人民主权（《社会契约论》）；霍布斯主张君主主权（《利维坦》）。",
-        "trap": "人民主权＝卢梭，三权分立＝孟德斯鸠，间接民主·抵抗权＝洛克。",
-        "kpLink": "kp-pol-01",
-        "q_cn": "著有「法の精神（《论法的精神》）」并主张「三権分立（三权分立）」的启蒙思想家是谁？",
-        "choices_cn": [
-            "ロック（洛克）",
-            "ルソー（卢梭）",
-            "モンテスキュー（孟德斯鸠）",
-            "ホッブズ（霍布斯）"
-        ],
-        "optExpl": [
-            "选项(1) 错误：洛克著《统冶二论（政府论）》，主张自然权利、社会契约与抵抗权（间接民主）。",
-            "选项(2) 错误：卢梭著《社会契约论》，主张人民主权与直接民主制。",
-            "选项(3) 正确：孟德斯鸠在《论法的精神》中主张将国家权力分为立法、行政、司法以互相制衡。",
-            "选项(4) 错误：霍布斯著《利维坦》，认为自然状态是“所有人对所有人的战争”，主张绝对君主主权。"
-        ]
-    },
-    {
-        "id": "pol-002",
-        "source": "未核实",
-        "deck": "政治",
-        "topic": "日本の統治機構",
-        "type": "mcq",
-        "q": "衆議院の優越が認められていないものはどれか。",
-        "choices": [
-            "予算の議決",
-            "条約の承認",
-            "内閣総理大臣の指名",
-            "憲法改正の発議"
-        ],
-        "a": 3,
-        "expl": "修宪发议须众参两院分别以【总议员 2/3 以上】赞成，两院完全对等，无众议院优越。其余三项及法律案再可决均有众议院优越。",
-        "trap": "预算先议权、内阁不信任案议决权仅众议院拥有；修宪发议两院完全对等。",
-        "kpLink": "kp-pol-01",
-        "q_cn": "在日本国会制度中，不适用「衆議院の優越（众议院优越）」原则的是哪一项？",
-        "choices_cn": [
-            "予算の議決（预算的议决）",
-            "条約の承認（条约的批准）",
-            "内閣総理大臣の指名（内阁总理大臣的指名）",
-            "憲法改正の発議（宪法修正案的提议）"
-        ],
-        "optExpl": [
-            "选项(1) 错误：预算案享众议院先议权，参议院30日内不议决或两院协议不一致时以众议院决议为准。",
-            "选项(2) 错误：条约批准在两院意见不一致且30日内未决时，适用众议院优越。",
-            "选项(3) 错误：首相指名在两院不一致且10日内未决时，以众议院指名为准。",
-            "选项(4) 正确：宪法改正的国会发议须众议院与参议院各自以总议员 2/3 以上赞成通过，两院地位完全对等。"
-        ]
-    },
-    {
-        "id": "pol-003",
-        "source": "未核实",
-        "deck": "政治",
-        "topic": "日本国憲法",
-        "type": "mcq",
-        "q": "日本国憲法の三大原則を答えよ。",
-        "back": "国民主権・基本的人権の尊重・平和主義",
-        "expl": "1946年11月3日公布，1947年5月3日施行。",
-        "kpLink": "kp-pol-02",
-        "q_cn": "关于「日本国憲法（日本国宪法）」的三大基本原则，以下哪一项完全正确？",
-        "choices": [
-            "国民主権・基本的人権の尊重・平和主義",
-            "君主主権・軍事力の保持・議院内閣制",
-            "国家神道・天皇親政・地方分権",
-            "国民投票・三権分立・法治主義"
-        ],
-        "choices_cn": [
-            "国民主権・基本的人権の尊重・平和主義（国民主权·尊重基本人权·和平主义）",
-            "君主主権・軍事力の保持・議院内閣制（君主主权·保持军事力量·议院内阁制）",
-            "国家神道・天皇親政・地方分権（国家神道·天皇亲政·地方分权）",
-            "国民投票・三権分立・法治主義（国民投票·三权分立·法治主义）"
-        ],
-        "a": 0,
-        "optExpl": [
-            "选项(1) 正确：日本国宪法三大支柱为国民主权（前文、第1条）、尊重基本人权（第11条等）、和平主义（第9条）。",
-            "选项(2) 错误：大日本帝国宪法（明治宪法）为天皇主权；现行宪法放弃战争，不保持陆海空战力。",
-            "选项(3) 错误：国家神道与天皇亲政属于战前体制，战后宪法第20条明确确立政教分离原则。",
-            "选项(4) 错误：三权分立与法治主义属于统治机构原理，并非日本国宪法特有的三大基本原则。"
-        ]
-    },
-    {
-        "id": "pol-004",
-        "source": "未核实",
-        "deck": "政治",
-        "topic": "政治参加",
-        "type": "mcq",
-        "q": "日本の衆議院議員総選挙で採用されている制度として正しいものはどれか。",
-        "choices": [
-            "小選挙区制のみ",
-            "比例代表制のみ",
-            "小選挙区比例代表並立制",
-            "大選挙区単記制"
-        ],
-        "a": 2,
-        "expl": "众议院采用小选举区比例代表并立制（定数465：小选区289＋比例代表176），允许重复立候补（按惜败率复活）。",
-        "trap": "日本众议院＝并立制；德国联邦议院＝并用制。",
-        "kpLink": "kp-pol-01",
-        "q_cn": "日本「衆議院議員総選挙（众议院议员大选）」所采用的选举制度是哪一项？",
-        "choices_cn": [
-            "小選挙区制のみ（仅采用小选区制）",
-            "比例代表制のみ（仅采用比例代表制）",
-            "小選挙区比例代表並立制（小选区比例代表并立制）",
-            "大選挙区単記制（大选区单记非移让制）"
-        ],
-        "optExpl": [
-            "选项(1) 错误：英国下议院采用单纯小选区制，日本众议院还结合了比例代表制。",
-            "选项(2) 错误：日本众议院并非单纯比例代表制，而是小选区与比例代表分别计票。",
-            "选项(3) 正确：1994年政治改革后，日本众议院采用「小選挙区比例代表並立制」，选民投2票（候选人票＋政党票）。",
-            "选项(4) 错误：中选区（大选区单记制）是日本1994年改革前众议院使用的旧制度。"
-        ]
-    },
-    {
-        "id": "pol-005",
-        "source": "未核实",
-        "deck": "政治",
-        "topic": "国際政治",
-        "type": "mcq",
-        "q": "国際連合安全保障理事会の常任理事国に認められている権限はどれか。",
-        "choices": [
-            "総会決議の取消権",
-            "拒否権",
-            "事務総長の解任権",
-            "国際司法裁判所の判決変更権"
-        ],
-        "a": 1,
-        "expl": "安理会5个常任理事国（美·英·法·俄·中）对实质事项拥有否决权（拒否権，大国一致原则）。",
-        "kpLink": "kp-pol-02",
-        "q_cn": "联合国「安全保障理事会（安全理事会）」的5个「常任理事国（常任理事国）」所拥有的特殊权限是哪一项？",
-        "choices_cn": [
-            "総会決議の取消権（联合国大会决议撤销权）",
-            "拒否権（否决权 / 大国一致原则）",
-            "事務総長の解任権（联合国秘书长单方解任权）",
-            "国際司法裁判所の判決変更権（国际法院判决变更权）"
-        ],
-        "optExpl": [
-            "选项(1) 错误：常任理事国无权单方面撤销联合国大会（総会）通过的决议。",
-            "选项(2) 正确：美、英、法、俄、中五常对安理会非程序性实质决议享有「拒否権（一票否决权）」。",
-            "选项(3) 错误：秘书长由安理会推荐并经大会任命，常任理事国无单方解任权。",
-            "选项(4) 错误：国际司法裁判所（ICJ，海牙）独立行使审判权，安理会无权更改其判决。"
-        ]
-    },
-    {
-        "id": "eco-001",
-        "source": "未核实",
-        "deck": "経済",
-        "topic": "市場経済",
-        "type": "mcq",
-        "q": "価格が上昇すると、一般に需要量と供給量はどう変化するか。",
-        "back": "需要量は減少し、供給量は増加する。",
-        "expl": "价格上升抑制消费需求，同时刺激企业扩大供给。",
-        "kpLink": "kp-eco-01",
-        "q_cn": "在一般市场经济中，当商品价格上升时，其「需要量（需求量）」和「供給量（供给量）」通常如何变化？",
-        "choices": [
-            "需要量は減少し、供給量は増加する",
-            "需要量は増加し、供給量は減少する",
-            "需要量・供給量ともに増加する",
-            "需要量・供給量ともに変化しない"
-        ],
-        "choices_cn": [
-            "需要量は減少し、供給量は増加する（需求量减少，供给量增加）",
-            "需要量は増加し、供給量は減少する（需求量增加，供给量减少）",
-            "需要量・供給量ともに増加する（需求量与供给量同时增加）",
-            "需要量・供給量ともに変化しない（需求量与供给量均不变化）"
-        ],
-        "a": 0,
-        "optExpl": [
-            "选项(1) 正确：价格上升抑制消费者购买欲导致需求量减少，同时刺激企业扩大生产提高供给量。",
-            "选项(2) 错误：这是价格下跌时的供求变化方向。",
-            "选项(3) 错误：需求曲线向右下方倾斜，价格上升不会使需求量增加。",
-            "选项(4) 错误：在自由价格机制下，价格直接调节供求数量，不会保持不变。"
-        ]
-    },
-    {
-        "id": "eco-002",
-        "source": "未核实",
-        "deck": "経済",
-        "topic": "国民経済",
-        "type": "mcq",
-        "q": "GDPの三面等価に含まれないものはどれか。",
-        "choices": [
-            "生産面",
-            "分配面",
-            "支出面",
-            "貿易面"
-        ],
-        "a": 3,
-        "expl": "GDP三面等价原则指生产、分配、支出三面数值相等，“贸易面”不属于三面等价。",
-        "kpLink": "kp-eco-01",
-        "q_cn": "国民经济核算中，「GDPの三面等価の原則（GDP三面等价原则）」不包含下列哪一面？",
-        "choices_cn": [
-            "生産面（生产面：各产业附加值总和）",
-            "分配面（分配面：工资、利润、利息等国民所得）",
-            "支出面（支出面：消费＋投资＋政府支出＋净出口）",
-            "貿易面（贸易面）"
-        ],
-        "optExpl": [
-            "选项(1) 错误：生产国民所得（生産面）属于三面等价之一。",
-            "选项(2) 错误：分配国民所得（分配面）属于三面等价之一。",
-            "选项(3) 错误：支出国民所得（支出面）属于三面等价之一。",
-            "选项(4) 正确：三面等价仅指「生産・分配・支出」三者恒等，净出口已包含在支出面内，不存在独立的“贸易面”。"
-        ]
-    },
-    {
-        "id": "eco-003",
-        "source": "未核实",
-        "deck": "経済",
-        "topic": "金融",
-        "type": "mcq",
-        "q": "日本銀行が景気を抑制するために行う政策として最も適当なものはどれか。",
-        "choices": [
-            "国債を買い入れる",
-            "政策金利を引き下げる",
-            "国債を売却する",
-            "預金保険料を廃止する"
-        ],
-        "a": 2,
-        "expl": "央行卖出国债（売りオペ）会回笼市场资金、推高利率，抑制通货膨胀与景气过热。买入国债（買いオペ）与降息属于宽松政策。",
-        "kpLink": "kp-eco-01",
-        "q_cn": "当经济过热或通货膨胀时，「日本銀行（日本央行）」为抑制景气而采取的紧缩性金融政策是哪一项？",
-        "choices_cn": [
-            "国債を買い入れる（买进国债：買いオペ）",
-            "政策金利を引き下げる（下调政策利率）",
-            "国債を売却する（卖出国债：売りオペ）",
-            "預金保険料を廃止する（废除存款保险费）"
-        ],
-        "optExpl": [
-            "选项(1) 错误：买进国债（買いオペ）向市场投放货币，属于刺激景气的金融缓和政策。",
-            "选项(2) 错误：下调政策利率会降低企业借贷成本，属于刺激景气的宽松政策。",
-            "选项(3) 正确：日本银行向金融机构卖出国债（売りオペ）可吸收市场流通资金、促使利率上升，从而抑制景气过热。",
-            "选项(4) 错误：存款保险制度用于保护储户与维护金融稳定，并非央行的景气调节工具。"
-        ]
-    },
-    {
-        "id": "eco-004",
-        "source": "未核实",
-        "deck": "経済",
-        "topic": "財政",
-        "type": "mcq",
-        "q": "景気変動を自動的に緩和する財政の仕組みを何というか。",
-        "back": "ビルトイン・スタビライザー（自動安定化装置）",
-        "expl": "代表制度为【累进所得税】与【失业保险给付】。",
-        "kpLink": "kp-eco-01",
-        "q_cn": "无需政府临时修改法律，就能随经济冷热自动平抑景气波动的财政制度称为什么？",
-        "choices": [
-            "ビルトイン・スタビライザー（自動安定化装置）",
-            "フィスカル・ポリシー（裁量的財政政策）",
-            "オープン・マーケット・オペレーション（公開市場操作）",
-            "プライマリー・バランス（基礎的財政収支）"
-        ],
-        "choices_cn": [
-            "ビルトイン・スタビライザー（内在稳定器 / 自动稳定装置）",
-            "フィスカル・ポリシー（相机抉择的裁量性财政政策）",
-            "オープン・マーケット・オペレーション（公开市场操作）",
-            "プライマリー・バランス（基础财政收支）"
-        ],
-        "a": 0,
-        "optExpl": [
-            "选项(1) 正确：累进所得税与社会保障给付（失业救济）能在繁荣期自动增税降温、衰退期自动减税补贴，称为内在稳定器。",
-            "选项(2) 错误：裁量性财政政策需要政府主动追加公共投资或临时减税。",
-            "选项(3) 错误：公开市场操作是中央银行买卖国债的货币政策手段。",
-            "选项(4) 错误：基础财政收支是衡量财政健康度的指标（税收等岁入减去国债费以外的岁出）。"
-        ]
-    },
-    {
-        "id": "eco-005",
-        "source": "未核实",
-        "deck": "経済",
-        "topic": "国際経済",
-        "type": "mcq",
-        "q": "自国通貨が円安になった場合、一般に起こりやすいことはどれか。",
-        "choices": [
-            "輸出品の外貨建て価格が上がる",
-            "輸入品の円建て価格が上がる",
-            "海外旅行の費用が下がる",
-            "輸入が必ず増える"
-        ],
-        "a": 1,
-        "expl": "日元贬值（円安）导致进口商品换算成日元变贵（推高进口物价），但利好出口企业与外国游客入境消费。",
-        "kpLink": "kp-eco-01",
-        "q_cn": "当外汇市场上日元贬值进入「円安（日元走弱）」状态时，通常会发生下列哪种现象？",
-        "choices_cn": [
-            "輸出品の外貨建て価格が上がる（日本出口商品的外币标价上涨）",
-            "輸入品の円建て価格が上がる（日本进口商品的日元标价上涨）",
-            "海外旅行の費用が下がる（日本人赴海外旅游的日元成本下降）",
-            "輸入が必ず増える（日本的进口量必然大幅增加）"
-        ],
-        "optExpl": [
-            "选项(1) 错误：日元贬值使日本商品换算成美元更便宜，外币标价下降、出口竞争力增强。",
-            "选项(2) 正确：日元贬值意味着购买同样1美元的外国商品需要支付更多日元，因此进口商品的日元价格上涨。",
-            "选项(3) 错误：日元贬值使兑换外币变贵，日本人出国旅行与留学的费用上升，而外国人来日旅游变便宜。",
-            "选项(4) 错误：由于进口商品变贵，进口量通常会受到抑制而非增加。"
-        ]
-    },
-    {
-        "id": "soc-001",
-        "source": "未核实",
-        "deck": "社会",
-        "topic": "私法と契約",
-        "type": "mcq",
-        "q": "消費者契約法が保護しようとする主体は誰か。",
-        "back": "事業者と契約する消費者",
-        "expl": "当经营者不实告知或断定判断导致消费者误认签约时，消费者可撤销合同。",
-        "kpLink": "kp-pol-02",
-        "q_cn": "日本的「消費者契約法（消费者契约法）」主要保护的对象是谁？",
-        "choices": [
-            "事業者と契約する個人（消費者）",
-            "中小企業を経営する事業者",
-            "金融商品取引所の投資家のみ",
-            "官公庁と取引する一般市民"
-        ],
-        "choices_cn": [
-            "事業者と契約する個人（与经营者订立合同的个人消费者）",
-            "中小企業を経営する事業者（经营中小企业的经营者）",
-            "金融商品取引所の投資家のみ（仅限金融交易所的专业投资者）",
-            "官公庁と取引する一般市民（与政府机构交易的普通市民）"
-        ],
-        "a": 0,
-        "optExpl": [
-            "选项(1) 正确：消费者契约法旨在弥补经营者与个人消费者之间的信息及交涉能力差距，允许受欺诈或困惑的消费者撤销合同。",
-            "选项(2) 错误：企业间的商业合同适用商法与下请法等，不适用消费者契约法。",
-            "选项(3) 错误：该法保护所有日常消费合同中的个人，不限于金融投资者。",
-            "选项(4) 错误：该法针对的是消费者与「事業者（企业/商家）」缔结的契约。"
-        ]
-    },
-    {
-        "id": "soc-002",
-        "source": "未核实",
-        "deck": "社会",
-        "topic": "雇用・労働",
-        "type": "mcq",
-        "q": "労働三権に含まれないものはどれか。",
-        "choices": [
-            "団結権",
-            "団体交渉権",
-            "団体行動権",
-            "職業選択権"
-        ],
-        "a": 3,
-        "expl": "劳动三权（宪法28条）包括团结权、团体交涉权、团体行动权（争议权）。职业选择自由属于宪法22条经济自由权。",
-        "kpLink": "kp-pol-02",
-        "q_cn": "日本国宪法第28条保障的「労働三権（劳动基本三权）」中，不包含下列哪一项？",
-        "choices_cn": [
-            "団結権（团结权：组织与加入工会的权利）",
-            "団体交渉権（集体谈判权：与雇主交涉劳动条件的权利）",
-            "団体行動権（集体行动权/争议权：罢工等权利）",
-            "職業選択権（职业选择自由权）"
-        ],
-        "optExpl": [
-            "选项(1) 错误：「団結権」是劳动三权的核心基础。",
-            "选项(2) 错误：「団体交渉権」属于劳动三权之一。",
-            "选项(3) 错误：「団体行動権（争議権）」属于劳动三权之一。",
-            "选项(4) 正确：「職業選択の自由」属于宪法第22条规定的经济自由权，而非第28条的劳动三权（社会权）。"
-        ]
-    },
-    {
-        "id": "geo-001",
-        "source": "未核实",
-        "deck": "地理",
-        "topic": "標準時と時差",
-        "type": "mcq",
-        "q": "経度15度の差は、原則として何時間の時差に当たるか。",
-        "back": "1時間",
-        "expl": "地球360度 ÷ 24小时 ＝ 每15度相差1小时（东加西减）。",
-        "kpLink": "kp-geo-01",
-        "q_cn": "地球表面经度每相差 15 度，原则上对应多少小时的时差？",
-        "choices": [
-            "1時間",
-            "2時間",
-            "30分",
-            "4時間"
-        ],
-        "choices_cn": [
-            "1時間（1小时）",
-            "2時間（2小时）",
-            "30分（30分钟）",
-            "4時間（4小时）"
-        ],
-        "a": 0,
-        "optExpl": [
-            "选项(1) 正确：地球自转一周 360° 耗时 24 小时，360° ÷ 24 = 15°/小时，东边时间比西边早。",
-            "选项(2) 错误：经度相差 30 度才对应 2 小时时差。",
-            "选项(3) 错误：经度相差 7.5 度才对应 30 分钟时差。",
-            "选项(4) 错误：经度相差 60 度才对应 4 小时时差。"
-        ]
-    },
-    {
-        "id": "geo-002",
-        "source": "未核实",
-        "deck": "地理",
-        "topic": "地形",
-        "type": "mcq",
-        "q": "河川が山地から平地に出る場所に形成されやすい地形はどれか。",
-        "choices": [
-            "三角州",
-            "扇状地",
-            "フィヨルド",
-            "砂州"
-        ],
-        "a": 1,
-        "expl": "河流出山口处流速骤降，粗砂砾堆积成【扇状地】（透水好，多果树园）；河口入海处细泥沙堆积成【三角州】（多水田）。",
-        "kpLink": "kp-geo-01",
-        "q_cn": "河流从山地流入平原的谷口处，因流速骤降导致砂砾堆积而形成的地形是哪一种？",
-        "choices_cn": [
-            "三角州（河口三角洲）",
-            "扇状地（山麓冲积扇）",
-            "フィヨルド（冰川峡湾）",
-            "砂州（沿岸沙洲）"
-        ],
-        "optExpl": [
-            "选项(1) 错误：「三角州（デルタ）」形成于河流入海口处，由细小泥沙沉积而成，多辟为水田。",
-            "选项(2) 正确：河流从山地出平地（谷口）处坡度骤减，粗大砂砾呈扇形堆积形成「扇状地」，扇央透水性强常种植果树。",
-            "选项(3) 错误：「フィヨルド（峡湾）」是冰川侵蚀形成的U形谷被海水淹没的海岸地形（如挪威沿岸）。",
-            "选项(4) 错误：「砂州」是由沿岸流搬运泥沙在海湾口堆积形成的海岸地形。"
-        ]
-    },
-    {
-        "id": "geo-003",
-        "source": "未核实",
-        "deck": "地理",
-        "topic": "気候",
-        "type": "mcq",
-        "q": "ケッペンの気候区分で、年中高温で降水量が非常に少ない気候はどれか。",
-        "choices": [
-            "Af",
-            "BW",
-            "Cs",
-            "Df"
-        ],
-        "a": 1,
-        "expl": "BW为沙漠气候；Af为热带雨林；Cs为地中海性气候（夏干冬雨）；Df为亚寒带湿润气候（南半球无D气候）。",
-        "kpLink": "kp-geo-01",
-        "q_cn": "在「ケッペンの気候区分（柯本气候分类法）」中，代表终年高温且降水量极少的「砂漠気候（沙漠气候）」符号是哪一个？",
-        "choices_cn": [
-            "Af（熱帯雨林気候：热带雨林气候）",
-            "BW（砂漠気候：沙漠气候）",
-            "Cs（地中海性気候：地中海气候）",
-            "Df（亜寒帯湿潤気候：亚寒带针叶林气候）"
-        ],
-        "optExpl": [
-            "选项(1) 错误：Af 为热带雨林气候，特征是终年高温多雨。",
-            "选项(2) 正确：B 代表干燥带，BW 为沙漠气候（BS 为草原气候），降水量极少且昼夜温差极大。",
-            "选项(3) 错误：Cs 为温带地中海性气候，特征是夏季炎热干燥、冬季温和多雨（适合种植橄榄与葡萄）。",
-            "选项(4) 错误：Df 为冷带（亚寒带）湿润气候，冬季严寒漫长，广泛分布泰加林（针叶林）。"
-        ]
-    },
-    {
-        "id": "geo-004",
-        "source": "未核实",
-        "deck": "地理",
-        "topic": "GIS",
-        "type": "mcq",
-        "q": "GISは何の略で、何を扱う仕組みか。",
-        "back": "Geographic Information System（地理情報システム）",
-        "expl": "在电子地图上叠加人口、交通、防灾等多层空间数据进行分析。",
-        "kpLink": "kp-geo-01",
-        "q_cn": "现代地理学中常提及的「GIS」是下列哪一项的简称，主要处理什么？",
-        "choices": [
-            "Geographic Information System（地理情報システム：地理空間データを処理）",
-            "Global Positioning System（衛星測位システム：現在位置を測定）",
-            "Greenland Ice Sheet（グリーンランド氷床：環境監視）",
-            "General International Statistics（国際一般統計：国勢調査）"
-        ],
-        "choices_cn": [
-            "地理情報システム（GIS：在电子地图上叠加分析多层空间地理数据）",
-            "衛星測位システム（GPS：利用卫星测定当前经纬度坐标）",
-            "グリーンランド氷床（极地气候监测系统）",
-            "国際一般統計（人口普查数据库）"
-        ],
-        "a": 0,
-        "optExpl": [
-            "选项(1) 正确：GIS（地理信息系统）在电子底图上叠加人口、交通、土地利用、防灾等多层空间数据进行可视化分析。",
-            "选项(2) 错误：GPS是利用人造卫星测定位置的全球定位系统，为GIS提供坐标数据但不等同于GIS。",
-            "选项(3) 错误：非冰原环境监测缩写。",
-            "选项(4) 错误：非国际综合统计缩写。"
-        ]
-    },
-    {
-        "id": "his-001",
-        "source": "未核实",
-        "deck": "歴史",
-        "topic": "近代化",
-        "type": "mcq",
-        "q": "フランス革命の開始を象徴する出来事はどれか。",
-        "choices": [
-            "ボストン茶会事件",
-            "バスティーユ牢獄襲撃",
-            "ウィーン会議",
-            "二月革命"
-        ],
-        "a": 1,
-        "expl": "1789年7月14日攻占巴士底狱标志着法国大革命爆发，随后发表《人权宣言》。",
-        "kpLink": "kp-pol-02",
-        "q_cn": "1789年7月14日爆发、象征「フランス革命（法国大革命）」正式开始的历史事件是哪一项？",
-        "choices_cn": [
-            "ボストン茶会事件（波士顿倾茶事件）",
-            "バスティーユ牢獄襲撃（攻占巴士底狱）",
-            "ウィーン会議（维也纳会议）",
-            "二月革命（1848年法国二月革命）"
-        ],
-        "optExpl": [
-            "选项(1) 错误：1773年波士顿倾茶事件是北美独立战争（1775年爆发）的导火索。",
-            "选项(2) 正确：1789年7月14日巴黎民众攻占象征专制王权的「バスティーユ牢獄（巴士底狱）」，标志着法国大革命爆发。",
-            "选项(3) 错误：1814—1815年维也纳会议是在拿破仑战争结束后重建欧洲旧秩序（维也纳体系）的会议。",
-            "选项(4) 错误：1848年二月革命推翻了法国七月王朝并建立法兰西第二共和国，瓦解了维也纳体系。"
-        ]
-    },
-    {
-        "id": "his-002",
-        "source": "未核实",
-        "deck": "歴史",
-        "topic": "二つの世界大戦",
-        "type": "mcq",
-        "q": "第一次世界大戦後に成立した国際平和機構は何か。",
-        "back": "国際連盟",
-        "expl": "1920年依《凡尔赛条约》成立，总部日内瓦；美国虽由威尔逊倡议但未加入。",
-        "kpLink": "kp-pol-02",
-        "q_cn": "第一次世界大战后根据「ヴェルサイユ条約（凡尔赛条约）」成立的第一个世界性和平机构是什么？",
-        "choices": [
-            "国際連盟（本部ジュネーブ）",
-            "国際連合（本部ニューヨーク）",
-            "経済協力開発機構（OECD）",
-            "国際赤十字社（ICRC）"
-        ],
-        "choices_cn": [
-            "国際連盟（国际联盟，总部设于日内瓦）",
-            "国際連合（联合国，总部设于纽约）",
-            "経済協力開発機構（OECD，总部设于巴黎）",
-            "国際赤十字社（国际红十字会）"
-        ],
-        "a": 0,
-        "optExpl": [
-            "选项(1) 正确：1920年依据威尔逊“十四点和平原则”与《凡尔赛条约》成立「国際連盟」，总部设在瑞士日内瓦。",
-            "选项(2) 错误：「国際連合（UN）」成立于1945年第二次世界大战结束之后。",
-            "选项(3) 错误：OECD成立于1961年，是由马歇尔计划受援国组织改组而成的发达国家经济合作机构。",
-            "选项(4) 错误：国际红十字会是19世纪由亨利·杜南创立的人道主义救援组织。"
-        ]
-    },
-    {
-        "id": "his-003",
-        "source": "未核实",
-        "deck": "歴史",
-        "topic": "冷戦",
-        "type": "mcq",
-        "q": "冷戦期の西側諸国の軍事同盟はどれか。",
-        "choices": [
-            "NATO",
-            "ワルシャワ条約機構",
-            "コミンテルン",
-            "ASEAN"
-        ],
-        "a": 0,
-        "expl": "NATO（北大西洋公约组织，1949）为西方阵营军事同盟；华沙条约组织（1955）为苏联阵营军事同盟。",
-        "kpLink": "kp-pol-02",
-        "q_cn": "冷战时期（1949年成立），以美国为首的「西側諸国（西方资本主义阵营）」组建的集体防卫军事同盟是哪一个？",
-        "choices_cn": [
-            "NATO（北大西洋条約機構：北大西洋公约组织）",
-            "ワルシャワ条約機構（WPO：华沙条约组织）",
-            "コミンテルン（共産主義インターナショナル：共产国际）",
-            "ASEAN（東南アジア諸国連合：东南亚国家联盟）"
-        ],
-        "optExpl": [
-            "选项(1) 正确：1949年美国与西欧各国签署《北大西洋公约》成立「NATO（北大西洋公约组织）」，是冷战西方阵营的核心军事同盟。",
-            "选项(2) 错误：「ワルシャワ条約機構（华约，1955）」是苏联率领东欧社会主义阵营对抗NATO的军事同盟。",
-            "选项(3) 错误：「コミンテルン（共产国际）」是1919年列宁在莫斯科建立的国际共产党组织，已于1943年解散。",
-            "选项(4) 错误：「ASEAN（东盟，1967）」是东南亚区域合作组织，并非欧美西方军事同盟。"
-        ]
-    },
-    {
-        "id": "his-004",
-        "source": "未核实",
-        "deck": "歴史",
-        "topic": "冷戦後の世界",
-        "type": "mcq",
-        "q": "冷戦終結の象徴とされる1989年の出来事は何か。",
-        "back": "ベルリンの壁の崩壊（およびマルタ会談）",
-        "expl": "1989年11月柏林墙倒塌、12月美苏马耳他会谈宣布冷战终结；1990年东西德统一；1991年12月苏联解体。",
-        "kpLink": "kp-pol-02",
-        "q_cn": "被普遍视为东西方「冷戦終結（冷战终结）」标志的 1989 年重大历史事件是什么？",
-        "choices": [
-            "ベルリンの壁の崩壊（およびマルタ会談）",
-            "ソビエト連邦の崩壊",
-            "キューバ危機の終息",
-            "朝鮮戦争の休戦協定調印"
-        ],
-        "choices_cn": [
-            "ベルリンの壁の崩壊（柏林墙倒塌及美苏马耳他峰会宣布冷战终结）",
-            "ソビエト連邦の崩壊（苏联解体，1991年）",
-            "キューバ危機の終息（古巴导弹危机解除，1962年）",
-            "朝鮮戦争の休戦協定調印（朝鲜战争停战协定签署，1953年）"
-        ],
-        "a": 0,
-        "optExpl": [
-            "选项(1) 正确：1989年11月柏林墙倒塌，同年12月美苏首脑在马耳他会谈正式宣布冷战终结。",
-            "选项(2) 错误：苏联正式解体是在1991年12月，属于冷战结束后的结果。",
-            "选项(3) 错误：古巴导弹危机发生在1962年，是冷战期间最接近核战争的危机。",
-            "选项(4) 错误：朝鲜战争停战协定签署于1953年，属于冷战初期的热战。"
-        ]
-    }
   ];
 
   const $ = sel => document.querySelector(sel);
@@ -697,6 +86,13 @@
         throwOnError: false
       });
     } catch (_) {}
+  }
+
+  // Tutor mark boxes stay empty until the answer step is opened
+  function setTutorBlanksRevealed(show) {
+    $$('#tutorChoicesBox .tutor-mark-slot-cell').forEach(cell => {
+      cell.textContent = show ? cell.dataset.ans : '';
+    });
   }
 
   function getProgress(cardOrId) {
@@ -815,6 +211,109 @@
     return lines.slice(0, 4).join('\n');
   }
 
+  // ─── Formula typesetting: turn the formula runs of a mixed CJK/ASCII line into KaTeX ───
+  const MATH_OPS = /[=+\-−×÷≦≧≤≥<>^√/²³°⇒]/;
+  const MATH_RUN = /[A-Za-z0-9 +\-−×÷=≦≧≤≥<>()\[\]{}^_\\/.,'²³√π°⇒|]+/g;
+  const MATH_JOIN = /\$([^$]*)\$(\s*)([぀-ヿ一-鿿]{1,10})(\s*)\$(\)[^$]*)\$/;
+
+  function unicodeMathToLatex(run) {
+    return run
+      .replace(/−/g, '-')
+      .replace(/×/g, '\\times ')
+      .replace(/÷/g, '\\div ')
+      .replace(/[≦≤]/g, '\\le ')
+      .replace(/[≧≥]/g, '\\ge ')
+      .replace(/⇒/g, '\\Rightarrow ')
+      .replace(/²/g, '^2').replace(/³/g, '^3')
+      .replace(/°/g, '^\\circ ')
+      .replace(/√\s*(\[[A-Z]+\]|\d+|[a-zA-Z])/g, '\\sqrt{$1}')
+      .replace(/√/g, '\\surd ')
+      .replace(/(?<![\w.\\{}])(\d+)\/(\d+)(?![\w.])/g, '\\tfrac{$1}{$2}')
+      .replace(/\[([A-Z]+)\]/g, '\\boxed{\\text{$1}}')
+      .replace(/π/g, '\\pi ')
+      .replace(/(?<![\\A-Za-z])(sin|cos|tan|log)(?![a-z])/g, '\\$1 ');
+  }
+
+  function mathifyLine(line) {
+    // Existing $ islands are already LaTeX; drop the delimiters so they join the surrounding run
+    const wrapped = String(line).replace(/\$/g, '').replace(MATH_RUN, run => {
+      const lead = run.match(/^[\s.,]*/)[0];
+      const trail = run.match(/[\s.,]*$/)[0];
+      const core = run.slice(lead.length, run.length - trail.length);
+      if (/^[a-z]$/.test(core)) return `${lead}$${core}$${trail}`;
+      if (!core || !MATH_OPS.test(core) || !/[A-Za-z0-9]/.test(core) || /^[A-Za-z]+$/.test(core)) return run;
+      return `${lead}$${unicodeMathToLatex(core)}$${trail}`;
+    });
+    // A short CJK word inside an open parenthesis, e.g. "−(x前面的数) ÷ …", stays inside the formula
+    const openParens = t => (t.match(/\(/g) || []).length - (t.match(/\)/g) || []).length;
+    let out = wrapped;
+    let prev;
+    do {
+      prev = out;
+      out = out.replace(MATH_JOIN, (m, a, s1, word, s2, b) => (openParens(a) > 0 ? `$${a}\\text{${word}}${b}$` : m));
+    } while (out !== prev);
+    return out;
+  }
+
+  // Short math notes (hint, trap): keep line breaks, typeset formulas
+  function formatMathInlineHtml(text) {
+    return String(text || '').trim().split('\n')
+      .map(l => `<div class="ms-line">${escapeHtml(mathifyLine(l.trim()))}</div>`).join('');
+  }
+
+  // Split a line on `sep` only outside $...$ math segments
+  function splitOutsideMath(line, sep) {
+    const parts = [];
+    let cur = '';
+    let inMath = false;
+    for (let i = 0; i < line.length; i++) {
+      if (line[i] === '$') inMath = !inMath;
+      if (!inMath && line.startsWith(sep, i)) {
+        parts.push(cur);
+        cur = '';
+        i += sep.length - 1;
+        continue;
+      }
+      cur += line[i];
+    }
+    parts.push(cur);
+    return parts;
+  }
+
+  // Lay out a math derivation step by step: 【步骤】 headings stand out, and
+  // chained "⇒" / "=" calculations are broken onto their own lines.
+  function formatMathStepsHtml(text) {
+    const out = [];
+    const push = (cls, content) => out.push(`<div class="${cls}">${escapeHtml(cls === 'ms-head' ? content : mathifyLine(content))}</div>`);
+    for (const rawLine of String(text || '').trim().split('\n')) {
+      const line = rawLine.trim();
+      if (!line) {
+        out.push('<div class="ms-gap"></div>');
+        continue;
+      }
+      if (/^【[^】]*】$/.test(line)) {
+        push('ms-head', line);
+        continue;
+      }
+      const baseCls = /^\s{2,}/.test(rawLine) ? 'ms-line ms-indent' : 'ms-line';
+      splitOutsideMath(line, '⇒').forEach((piece, pi) => {
+        const seg = piece.trim();
+        if (!seg) return;
+        // Long "a = b = c = d" chains: put each "= ..." on its own line
+        const eqParts = splitOutsideMath(seg, ' = ');
+        const lines = eqParts.length >= 4
+          ? [eqParts[0] + ' = ' + eqParts[1], ...eqParts.slice(2).map(p => '= ' + p.trim())]
+          : [seg];
+        lines.forEach((l, li) => {
+          const prefix = pi > 0 && li === 0 ? '⇒ ' : '';
+          const cls = pi > 0 || li > 0 ? `${baseCls} ms-cont` : baseCls;
+          push(cls, prefix + l.trim());
+        });
+      });
+    }
+    return out.join('');
+  }
+
   // ─── Countdown & Top Stats ───
   function getTodayStats() {
     const today = localDateKey();
@@ -929,13 +428,13 @@
           <span>${def.label} <small class="jp-sub">${DECK_JP_SUB[def.id] || ''}</small></span>
           ${hasVerified
             ? `<span class="deck-chip-pct">${pct}%</span>`
-            : `<span class="tag tag-source-unverified" style="font-size:11px;padding:1px 6px">未核实</span>`}
+            : `<span class="deck-chip-pct">${total} 题</span>`}
         </div>
         <div class="mini-bar mini-bar-ok"><span style="width:${pct}%"></span></div>
         <div class="deck-chip-sub">${
           hasVerified
             ? `已核实掌握 ${mastered}/${verifiedPool.length}${unverifiedInPool ? ` · 未核实 ${unverifiedInPool}` : ''}${wrong ? ` · 错题 ${wrong}` : ''}`
-            : `未核实 ${total} 题（不计入掌握率）${wrong ? ` · 错题 ${wrong}` : ''}`
+            : `未核实 · 不计入掌握率${wrong ? ` · 错题 ${wrong}` : ''}`
         }</div>
       `;
       btn.addEventListener('click', () => {
@@ -1110,16 +609,12 @@
     // Question text with bilingual toggle support (default ON)
     const qCn = activeCard.q_cn;
     const qJp = activeCard.q;
-    if (showChinese && qCn) {
-      $('#studyQuestion').textContent = qCn;
-      if (qJp && qJp !== qCn) {
-        $('#studyQuestionSub').hidden = false;
-        $('#studyQuestionSub').textContent = `日文原题：${qJp}`;
-      } else {
-        $('#studyQuestionSub').hidden = true;
-      }
+    // The exam is in Japanese: the original is always the main text, Chinese is an aid below it
+    $('#studyQuestion').textContent = qJp || qCn;
+    if (showChinese && qCn && qCn !== qJp) {
+      $('#studyQuestionSub').hidden = false;
+      $('#studyQuestionSub').textContent = `中文译文：${qCn}`;
     } else {
-      $('#studyQuestion').textContent = qJp;
       $('#studyQuestionSub').hidden = true;
     }
 
@@ -1170,12 +665,13 @@
       choicesBox.hidden = false;
       flipBar.hidden = true;
       markPanel.hidden = true;
-      const choicesList = (showChinese && Array.isArray(activeCard.choices_cn)) ? activeCard.choices_cn : activeCard.choices;
-      choicesList.forEach((choiceText, idx) => {
+      const cnList = Array.isArray(activeCard.choices_cn) ? activeCard.choices_cn : [];
+      activeCard.choices.forEach((choiceText, idx) => {
         const btn = document.createElement('button');
         btn.type = 'button';
         btn.className = 'choice-btn';
-        btn.innerHTML = `<span class="choice-key">${idx + 1}</span><span>${choiceText}</span>`;
+        const cn = showChinese && cnList[idx] && cnList[idx] !== choiceText ? `<span class="choice-cn">${cnList[idx]}</span>` : '';
+        btn.innerHTML = `<span class="choice-key">${idx + 1}</span><span class="choice-body"><span class="choice-jp">${choiceText}</span>${cn}</span>`;
         btn.addEventListener('click', () => handleAnswerMcq(idx, btn));
         choicesBox.appendChild(btn);
       });
@@ -1194,6 +690,8 @@
     markCells = [];
     markValues = [];
     activeCellIdx = 0;
+    const emptyTip = $('#studyMarkEmptyTip');
+    if (emptyTip) emptyTip.hidden = true;
 
     const blanks = Array.isArray(card.blanks) && card.blanks.length ? card.blanks : [{key: 'A', label: '[A]', ans: '0', len: 1}];
     let cellGlobalIdx = 0;
@@ -1253,6 +751,8 @@
     }
     if (!/^[0-9\-]$/.test(char)) return;
     markValues[activeCellIdx] = char;
+    const emptyTip = $('#studyMarkEmptyTip');
+    if (emptyTip) emptyTip.hidden = true;
     const el = document.getElementById(`markCell_${activeCellIdx}`);
     if (el) el.textContent = char;
     if (activeCellIdx < markCells.length - 1) {
@@ -1262,6 +762,12 @@
 
   function handleMarkSubmit() {
     if (answered || !activeCard || activeCard.type !== 'mark') return;
+    // An empty sheet is not an attempt: ask for input instead of logging a wrong answer
+    if (!markValues.some(v => v !== undefined && v !== '')) {
+      const tip = $('#studyMarkEmptyTip');
+      if (tip) tip.hidden = false;
+      return;
+    }
     answered = true;
     let allCorrect = true;
     const blanks = activeCard.blanks || [];
@@ -1313,8 +819,11 @@
       else if (btn === clickedBtn) btn.classList.add('is-wrong');
     });
 
-    const choicesList = (showChinese && Array.isArray(activeCard.choices_cn)) ? activeCard.choices_cn : activeCard.choices;
-    showStudyFeedback(isCorrect, choicesList[activeCard.a]);
+    showStudyFeedback(isCorrect, mcqAnswerText(activeCard));
+  }
+
+  function mcqAnswerText(card) {
+    return `(${card.a + 1}) ${card.choices[card.a]}`;
   }
 
   function handleAnswerUnsure() {
@@ -1328,9 +837,8 @@
     } else if (activeCard.type === 'mark') {
       revealMarkAnswers();
     }
-    const choicesList = (showChinese && Array.isArray(activeCard.choices_cn)) ? activeCard.choices_cn : activeCard.choices;
     const ansText = activeCard.type === 'mcq'
-      ? choicesList[activeCard.a]
+      ? mcqAnswerText(activeCard)
       : (activeCard.ansSummary || activeCard.back);
     showStudyFeedback(false, ansText, true); // isUnsure = true
   }
@@ -1381,7 +889,7 @@
           ${activeCard.optExpl.map((txt, idx) => `
             <div class="opt-expl-item ${idx === activeCard.a ? 'is-correct-opt' : 'is-wrong-opt'}">
               <span class="opt-expl-num">(${idx + 1})</span>
-              <span class="opt-expl-text">${txt}</span>
+              <span class="opt-expl-text">${String(txt).replace(/^选项\(\d\)\s*/, '')}</span>
             </div>
           `).join('')}
         </div>
@@ -1391,10 +899,16 @@
       optExplBox.innerHTML = '';
     }
 
-    explEl.textContent = getConciseExpl(activeCard);
+    if (isMathCard(activeCard)) {
+      // Math derivations must be shown in full, one step per line
+      explEl.innerHTML = formatMathStepsHtml(activeCard.expl || '按基本公式代入即可。');
+    } else {
+      explEl.textContent = getConciseExpl(activeCard);
+    }
     if (activeCard.trap) {
       trapEl.hidden = false;
-      trapEl.textContent = `防坑提醒：${activeCard.trap}`;
+      if (isMathCard(activeCard)) trapEl.innerHTML = `<div class="ms-head">防坑提醒</div>${formatMathInlineHtml(activeCard.trap)}`;
+      else trapEl.textContent = `防坑提醒：${activeCard.trap}`;
     } else {
       trapEl.hidden = true;
     }
@@ -1819,18 +1333,20 @@
       const cnt = state.history.filter(h => h.date === key).length;
       counts.push({label: key.slice(5), cnt});
     }
-    const maxCnt = Math.max(20, ...counts.map(c => c.cnt));
-    for (const item of counts) {
+    const maxCnt = Math.max(DAILY_TARGET, ...counts.map(c => c.cnt));
+    // A dashed tick at the daily goal in every track, so each day reads against the target
+    const targetPct = Math.round((DAILY_TARGET / maxCnt) * 100);
+    counts.forEach((item, i) => {
       const hPct = Math.round((item.cnt / maxCnt) * 100);
       const col = document.createElement('div');
-      col.className = 'chart-col';
+      col.className = i === counts.length - 1 ? 'chart-col is-today' : 'chart-col';
       col.innerHTML = `
         <span class="chart-val">${item.cnt}</span>
-        <div class="chart-bar-wrap"><div class="chart-bar-fill" style="height:${hPct}%"></div></div>
-        <span class="chart-day">${item.label}</span>
+        <div class="chart-bar-wrap"><i class="chart-target-tick" style="bottom:${targetPct}%"></i><div class="chart-bar-fill" style="height:${hPct}%"></div></div>
+        <span class="chart-day">${i === counts.length - 1 ? '今天' : item.label}</span>
       `;
       chart.appendChild(col);
-    }
+    });
   }
 
   function renderMocksList() {
@@ -1939,13 +1455,13 @@
       const blanksWrap = document.createElement('div');
       blanksWrap.className = 'tutor-mark-blanks-preview';
       blanksWrap.innerHTML = `
-        <div class="mark-tip-bar" style="margin-bottom:8px">【EJU マーク式 填空】原卷栏位与正解对照：</div>
+        <div class="mark-tip-bar" style="margin-bottom:8px">【EJU マーク式 填空】原卷栏位（点「3. 看最终答案」后显示正解）：</div>
         <div class="mark-slots-wrap" style="margin-bottom:8px">
           ${card.blanks.map(b => `
             <div class="mark-slot-box" style="padding:6px 10px">
               <div class="mark-slot-label">${b.label}</div>
               <div class="mark-slot-inputs">
-                ${Array.from({length: b.len || (b.ans ? String(b.ans).length : 1)}).map((_, i) => `<span class="mark-cell-input tutor-mark-slot-cell" style="width:32px;height:36px;font-size:16px">${(b.ans && String(b.ans)[i]) || '?'}</span>`).join('')}
+                ${Array.from({length: b.len || (b.ans ? String(b.ans).length : 1)}).map((_, i) => `<span class="mark-cell-input tutor-mark-slot-cell" data-ans="${(b.ans && String(b.ans)[i]) || '?'}" style="width:32px;height:36px;font-size:16px"></span>`).join('')}
               </div>
             </div>
           `).join('')}
@@ -1984,14 +1500,15 @@
     ansBox.hidden = true;
     $$('.step-reveal-btn').forEach(b => b.classList.remove('is-open'));
 
-    hintBox.textContent = `【破题公式】${getCardHint(card)}`;
-    explBox.textContent = card.expl || '按基本公式代入即可。';
+    hintBox.innerHTML = `<div class="ms-head">破题公式</div>${formatMathInlineHtml(getCardHint(card))}`;
+    explBox.innerHTML = formatMathStepsHtml(card.expl || '按基本公式代入即可。');
     const ansStr = card.type === 'mark'
       ? `マーク式正解：${card.ansSummary || (card.blanks || []).map(b => `${b.label}=${b.ans}`).join(', ')}`
       : card.type === 'mcq'
       ? `选项 (${card.a + 1})：${card.choices[card.a]}`
       : card.back;
-    ansBox.textContent = `【最终答案】${ansStr}${card.trap ? `\n【易错提醒】${card.trap}` : ''}`;
+    ansBox.innerHTML = `<div class="ms-head">最终答案</div><div class="ms-line">${escapeHtml(ansStr)}</div>`
+      + (card.trap ? `<div class="ms-gap"></div><div class="ms-head">易错提醒</div>${formatMathInlineHtml(card.trap)}` : '');
 
     renderMathIn($('#view-math'));
 
@@ -2036,13 +1553,13 @@
         </div>
         <div class="stat-item">
           <div class="stat-label">已核实一致（计入掌握率）</div>
-          <div class="stat-val-row"><strong class="stat-val stat-val-ok">${s.verifiedConsistentCount}</strong><span class="stat-sub">真题 16 + 改编 6</span></div>
-          <div class="stat-hint">SymPy + 正解表 + 题库三方一致</div>
+          <div class="stat-val-row"><strong class="stat-val stat-val-ok">${s.verifiedConsistentCount}</strong><span class="stat-sub">真题 ${s.mathRealCount} + 改编 ${s.mathAdaptedCount}</span></div>
+          <div class="stat-hint">原卷正解表逐空核对 + tools/verify_math.py 重算</div>
         </div>
         <div class="stat-item">
-          <div class="stat-label">三者不一致 · 待您裁定</div>
-          <div class="stat-val-row"><strong class="stat-val stat-val-danger">${s.discrepancyCount}</strong><span class="stat-sub">未擅自改动题面</span></div>
-          <div class="stat-hint">含 2025 I問1(1) 等转录偏差</div>
+          <div class="stat-label">不一致 · 待裁定</div>
+          <div class="stat-val-row"><strong class="stat-val stat-val-danger">${s.discrepancyCount}</strong><span class="stat-sub">已全部按原卷修正</span></div>
+          <div class="stat-hint">原 12 道转录偏差已修正</div>
         </div>
         <div class="stat-item">
           <div class="stat-label">未核实（不计入掌握率）</div>
@@ -2585,6 +2102,7 @@
         if (!box) return;
         box.hidden = !box.hidden;
         btn.classList.toggle('is-open', !box.hidden);
+        if (step === 'ans') setTutorBlanksRevealed(!box.hidden);
         renderMathIn(box);
       });
     });
@@ -2597,6 +2115,7 @@
         }
       });
       $$('.step-reveal-btn').forEach(b => b.classList.add('is-open'));
+      setTutorBlanksRevealed(true);
     });
 
     // Tutor verdict buttons (linked to progress & 17-day plan)
