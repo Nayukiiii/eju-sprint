@@ -524,6 +524,17 @@
               <span class="wb-stylus-badge" title="友基M708 压感驱动就绪">友基M708 压感/侧键已就绪</span>
             </div>
 
+            <!-- 学习小组：同伴在线状态、跟随讲题、笔记图层 -->
+            <div class="group-board-bar" id="groupBoardBar" hidden>
+              <span class="group-presence" id="groupPresence"></span>
+              <label class="group-follow"><input type="checkbox" id="groupFollowToggle"> 跟随讲题（对方翻题、移动画布时我跟着走）</label>
+              <span class="group-legend">黄色描边 = 对方的笔记</span>
+              <span class="group-layers" role="group" aria-label="笔记图层">
+                <button class="wb-btn is-active" data-layer-view="all" type="button">全部</button>
+                <button class="wb-btn" data-layer-view="mine" type="button">只看我的</button>
+                <button class="wb-btn" data-layer-view="partner" type="button">只看对方</button>
+              </span>
+            </div>
             <div class="wb-canvas-wrap" id="wbCanvasWrap">
               <canvas id="wbCanvas" width="820" height="560"></canvas>
             </div>
@@ -851,18 +862,52 @@
   <div class="modal-backdrop" id="syncModal" hidden>
     <div class="modal-box modal-sm">
       <div class="modal-head">
-        <h3>多设备云同步 &amp; ATRI 提醒</h3>
+        <h3>学习小组 · 云同步</h3>
         <button class="text-btn" id="closeSyncModalBtn" type="button">关闭</button>
       </div>
       <div class="modal-body">
-        <p class="section-sub">电脑与手机填写同一个同步口令即可实时同步刷题进度、错题本与待讲题单。</p>
-        <div class="sync-form-row">
-          <input type="text" id="syncTokenInput" placeholder="输入同步口令（如 nayuki）">
-          <button class="btn btn-primary" id="syncNowBtn" type="button">立即同步</button>
+        <!-- Not in a group yet -->
+        <div id="groupSetupPane">
+          <p class="section-sub">小组成员共用一份刷题进度、错题本与待讲题单；数学白板各自一层，互相实时可见。</p>
+          <label class="group-field"><span>你的昵称</span><input type="text" id="groupMemberName" maxlength="24" placeholder="例如：nayuki"></label>
+          <div class="group-choice">
+            <div class="group-choice-col">
+              <h4>创建新小组</h4>
+              <input type="text" id="groupNameInput" maxlength="24" placeholder="小组名，例如：冲刺小队">
+              <button class="btn btn-primary" id="groupCreateBtn" type="button">创建并生成邀请链接</button>
+            </div>
+            <div class="group-choice-col">
+              <h4>加入已有小组</h4>
+              <input type="text" id="groupInviteInput" placeholder="粘贴邀请码或邀请链接">
+              <button class="btn" id="groupJoinBtn" type="button">加入</button>
+            </div>
+          </div>
+          <p class="group-note">加入后，这台设备上已有的刷题进度会合并进小组的共同进度。</p>
         </div>
-        <p class="stat-hint" id="syncStatusText">当前口令：nayuki</p>
+
+        <!-- In a group -->
+        <div id="groupInfoPane" hidden>
+          <p class="group-title"><strong id="groupNameText"></strong> · 我是 <strong id="groupMeText"></strong></p>
+          <ul class="group-members" id="groupMembersList"></ul>
+          <div class="group-link-row">
+            <span>邀请对方加入</span>
+            <input type="text" id="groupInviteLink" readonly>
+            <button class="btn btn-sm" id="groupCopyInviteBtn" type="button">复制</button>
+          </div>
+          <div class="group-link-row">
+            <span>我的其他设备</span>
+            <input type="text" id="groupDeviceLink" readonly>
+            <button class="btn btn-sm" id="groupCopyDeviceBtn" type="button">复制</button>
+          </div>
+          <p class="group-note">「我的其他设备」链接等同于你的登录凭证，只在自己的手机/平板上打开，不要发给别人。</p>
+          <div class="group-actions">
+            <button class="text-btn" id="groupLeaveBtn" type="button">在这台设备上退出小组</button>
+          </div>
+        </div>
+        <p class="stat-hint" id="syncStatusText">未加入小组：进度只保存在本机浏览器。</p>
       </div>
     </div>
+  </div>
   </div>
 
   <script src="./bank.js"></script>
@@ -878,6 +923,7 @@
     <script src="./whiteboard.js"></script>
   <script src="./math_tools.js"></script>
   <script src="./app.js"></script>
+  <script src="./sync.js"></script>
   <script type="module" src="./ai_verify.js"></script>
 </body>
 </html>

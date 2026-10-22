@@ -1,0 +1,26 @@
+# systemd unit for the EJU sync server.
+# Install: sudo cp server/eju-sync.service /etc/systemd/system/ && sudo systemctl daemon-reload
+#          sudo systemctl enable --now eju-sync
+# Adjust User / WorkingDirectory / EJU_SYNC_DB to the server's layout.
+[Unit]
+Description=EJU sprint study-group sync server
+After=network.target
+
+[Service]
+Type=simple
+User=www-data
+WorkingDirectory=/opt/eju-sprint
+Environment=EJU_SYNC_DB=/var/lib/eju-sync/eju_sync.db
+Environment=EJU_SYNC_HOST=127.0.0.1
+Environment=EJU_SYNC_PORT=8787
+StateDirectory=eju-sync
+ExecStart=/usr/bin/python3 /opt/eju-sprint/server/eju_sync_server.py
+Restart=always
+RestartSec=3
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/var/lib/eju-sync
+
+[Install]
+WantedBy=multi-user.target

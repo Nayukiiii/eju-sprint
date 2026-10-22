@@ -49,6 +49,16 @@
   // Auto-save timer
   let autoSaveTimeout = null;
 
+  // Study-group layers (filled by sync.js): partner layers are read-only, drawn under mine
+  let partnerLayers = []; // [{memberId, name, strokes: []}]
+  let liveStrokes = {}; // memberId -> in-progress stroke being drawn right now
+  let pointers = {}; // memberId -> {x, y, name, at}
+  let showMine = true;
+  let showPartners = true;
+  // Callbacks set by sync.js: onLayerChanged(cardId, strokes), onLive(cardId, stroke|null),
+  // onPointer(cardId, {x, y}|null), onView(cardId, {cx, cy, scale})
+  const hooks = {};
+
   function initWhiteboard() {
     canvas = document.getElementById('wbCanvas');
     wrapEl = document.getElementById('wbCanvasWrap');
@@ -185,7 +195,10 @@
       return;
     }
 
-    if (!isDrawing && !isDraggingSelection) return;
+    if (!isDrawing && !isDraggingSelection) {
+      if (activeCardId) hooks.onPointer?.(activeCardId, {x: coords.x, y: coords.y});
+      return;
+    }
 
     if (isDraggingSelection) {
       const dx = coords.x - dragStartPos.x;
@@ -233,6 +246,7 @@
         eraseAt(coords.x, coords.y);
       } else {
         currentStroke.points.push({ x: coords.x, y: coords.y, p: coords.p });
+        if (activeCardId) hooks.onLive?.(activeCardId, currentStroke);
         if (currentStroke.mode === 'marker') {
           // Redraw whole canvas so marker has uniform alpha without overlapping dot buildup
           redrawCanvas();
@@ -256,6 +270,7 @@
       isPanning = false;
       if (wrapEl) wrapEl.style.cursor = isSpacePressed ? 'grab' : 'default';
       saveNow();
+      reportView();
       return;
     }
 
@@ -294,8 +309,18 @@
       currentStroke = null;
       preActionSnapshot = null;
       didModifyInAction = false;
+      if (activeCardId) hooks.onLive?.(activeCardId, null);
       redrawCanvas();
     }
+  }
+
+  function reportView() {
+    if (!activeCardId || !canvas) return;
+    hooks.onView?.(activeCardId, {
+      cx: (canvas.width / 2 - panX) / scale,
+      cy: (canvas.height / 2 - panY) / scale,
+      scale
+    });
   }
 
   function onWheel(e) {
@@ -315,6 +340,7 @@
       scale = newScale;
       redrawCanvas();
       triggerAutoSave();
+      reportView();
     }
   }
 
@@ -399,13 +425,26 @@
     ctx.translate(panX, panY);
     ctx.scale(scale, scale);
 
-    for (const str of strokes) {
-      renderSingleStroke(str, selectedStrokes.includes(str));
+    if (showPartners) {
+      for (const layer of partnerLayers) {
+        for (const str of layer.strokes) renderSingleStroke(str, false, true);
+      }
+      for (const live of Object.values(liveStrokes)) {
+        if (live && live.mode !== 'eraser') renderSingleStroke(live, false, true);
+      }
+    }
+
+    if (showMine) {
+      for (const str of strokes) {
+        renderSingleStroke(str, selectedStrokes.includes(str));
+      }
     }
 
     if (currentStroke && currentStroke.mode !== 'eraser') {
       renderSingleStroke(currentStroke, false);
     }
+
+    if (showPartners) renderPointers();
 
     if (currentMode === 'lasso' && lassoPoints.length > 1) {
       renderLassoPolygon();
@@ -503,7 +542,7 @@
     ctx.restore();
   }
 
-  function renderSingleStroke(str, isSelected) {
+  function renderSingleStroke(str, isSelected, isPartner = false) {
     if (str.type === 'stamp') {
       renderStampObject(str, isSelected);
       return;
@@ -511,6 +550,21 @@
 
     const pts = str.points;
     if (!pts || !pts.length) return;
+
+    // The partner's ink keeps its colour but sits on a soft mustard halo, so layers are told apart
+    if (isPartner && str.mode !== 'marker') {
+      ctx.save();
+      ctx.lineCap = 'round';
+      ctx.lineJoin = 'round';
+      ctx.strokeStyle = 'rgba(240, 184, 87, 0.45)';
+      ctx.lineWidth = (str.width || 2) * 1.6 + 6;
+      ctx.beginPath();
+      ctx.moveTo(pts[0].x, pts[0].y);
+      for (let i = 1; i < pts.length; i++) ctx.lineTo(pts[i].x, pts[i].y);
+      if (pts.length === 1) ctx.lineTo(pts[0].x + 0.5, pts[0].y);
+      ctx.stroke();
+      ctx.restore();
+    }
 
     ctx.save();
     ctx.lineCap = 'round';
@@ -563,6 +617,25 @@
       ctx.stroke();
     }
     ctx.restore();
+  }
+
+  // Partner's pen position, so "look here" works over a video call
+  function renderPointers() {
+    const fresh = Date.now() - 4000;
+    for (const p of Object.values(pointers)) {
+      if (!p || p.at < fresh) continue;
+      ctx.save();
+      ctx.fillStyle = '#D67052';
+      ctx.globalAlpha = 0.85;
+      ctx.beginPath();
+      ctx.arc(p.x, p.y, 6 / scale, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.globalAlpha = 1;
+      ctx.font = `${12 / scale}px "Noto Sans SC", sans-serif`;
+      ctx.fillStyle = '#23304A';
+      ctx.fillText(p.name || '', p.x + 9 / scale, p.y - 8 / scale);
+      ctx.restore();
+    }
   }
 
   function renderStampObject(stamp, isSelected) {
@@ -855,7 +928,73 @@
       saveCardWhiteboard(activeCardId);
     }
     activeCardId = cardId;
+    partnerLayers = [];
+    liveStrokes = {};
+    pointers = {};
     loadCardWhiteboard(cardId);
+    hooks.onCardOpened?.(cardId);
+  }
+
+  // ─── Study-group API (used by sync.js) ───
+  function setPartnerLayers(cardId, layers) {
+    if (cardId !== activeCardId) return;
+    partnerLayers = layers;
+    redrawCanvas();
+  }
+
+  // My own layer changed on another of my devices
+  function replaceOwnStrokes(cardId, ownStrokes) {
+    if (cardId !== activeCardId) {
+      try {
+        const raw = localStorage.getItem('eju_wb_' + cardId);
+        const data = raw ? JSON.parse(raw) : {};
+        data.strokes = ownStrokes;
+        data.savedAt = Date.now();
+        localStorage.setItem('eju_wb_' + cardId, JSON.stringify(data));
+      } catch (_) {}
+      return true;
+    }
+    if (isDrawing || isDraggingSelection) return false; // mid-gesture: caller retries
+    strokes = ownStrokes;
+    selectedStrokes = [];
+    selectionBox = null;
+    try {
+      const raw = localStorage.getItem('eju_wb_' + cardId);
+      const data = raw ? JSON.parse(raw) : {};
+      data.strokes = strokes;
+      localStorage.setItem('eju_wb_' + cardId, JSON.stringify(data));
+    } catch (_) {}
+    redrawCanvas();
+    return true;
+  }
+
+  function setLive(cardId, memberId, stroke) {
+    if (cardId !== activeCardId) return;
+    if (stroke) liveStrokes[memberId] = stroke;
+    else delete liveStrokes[memberId];
+    redrawCanvas();
+  }
+
+  function setPointer(cardId, memberId, point) {
+    if (cardId !== activeCardId) return;
+    if (point) pointers[memberId] = {...point, at: Date.now()};
+    else delete pointers[memberId];
+    redrawCanvas();
+  }
+
+  // Follow mode: centre my view where the partner is looking
+  function setView(view) {
+    if (!canvas || !view) return;
+    scale = Math.min(3.0, Math.max(0.4, view.scale || 1));
+    panX = canvas.width / 2 - view.cx * scale;
+    panY = canvas.height / 2 - view.cy * scale;
+    redrawCanvas();
+  }
+
+  function setLayerVisibility(mine, partners) {
+    showMine = mine;
+    showPartners = partners;
+    redrawCanvas();
   }
 
   function saveCardWhiteboard(cardId) {
@@ -871,6 +1010,7 @@
       };
       localStorage.setItem('eju_wb_' + cardId, JSON.stringify(data));
     } catch (_) {}
+    hooks.onLayerChanged?.(cardId, strokes);
   }
 
   function saveNow() {
@@ -991,6 +1131,22 @@
     resetZoom,
     toggleFullscreen,
     pasteText: pasteTextToBoard,
-    save: saveNow
+    save: saveNow,
+    hooks,
+    activeCardId: () => activeCardId,
+    ownStrokes: cardId => {
+      if (cardId === activeCardId) return strokes;
+      try {
+        return JSON.parse(localStorage.getItem('eju_wb_' + cardId) || '{}').strokes || [];
+      } catch (_) {
+        return [];
+      }
+    },
+    setPartnerLayers,
+    replaceOwnStrokes,
+    setLive,
+    setPointer,
+    setView,
+    setLayerVisibility
   };
 })();
