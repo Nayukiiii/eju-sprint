@@ -153,7 +153,11 @@
       } else if (isUnverified(card)) {
         bannerEl.hidden = false;
         bannerEl.className = 'study-audit-banner is-unverified';
-        bannerEl.textContent = '【未核实题目】本题暂无官方正解表出处，仅供知识点练习，作答结果不计入掌握率。';
+        const ai = window.EJU_AI_VERIFY?.verdictFor(card.id);
+        const aiNote = !ai ? '' : ai.verdict === 'agree'
+          ? ' AI 交叉核验：与题库答案一致。'
+          : ` AI 交叉核验：${ai.label}${ai.summary ? `——${ai.summary}` : ''}（详见「核验报告」）`;
+        bannerEl.textContent = `【未核实题目】本题暂无官方正解表出处，仅供知识点练习，作答结果不计入掌握率。${aiNote}`;
       } else {
         bannerEl.hidden = true;
         bannerEl.textContent = '';

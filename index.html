@@ -732,6 +732,52 @@
       <!-- 阶段 1 总览指标条 -->
       <div class="audit-summary-strip" id="auditSummaryStrip"></div>
 
+      <!-- AI 交叉核验（文综）：Key 与结果只保存在本浏览器 -->
+      <article class="card ai-verify-card" id="aiVerifyPanel">
+        <div class="section-head">
+          <div>
+            <h2 class="section-title">AI 交叉核验 · 文综 204 题</h2>
+            <p class="section-sub">AI 只看题干和选项、看不到题库答案，独立作答后再与题库比对；并逐项判断每个选项的对错，标出“可能两个都对/都不对”和“信息可能过时”的题。AI 也会出错：结果是复查线索，不等于官方核实，不计入掌握率。</p>
+          </div>
+        </div>
+
+        <div class="ai-settings">
+          <label class="ai-field">
+            <span>Anthropic API Key</span>
+            <span class="ai-key-row">
+              <input type="password" id="aiKeyInput" autocomplete="off" spellcheck="false" placeholder="sk-ant-…">
+              <button class="btn btn-sm" id="aiSaveKeyBtn" type="button">保存</button>
+              <button class="text-btn" id="aiForgetKeyBtn" type="button">删除</button>
+              <span class="ai-key-state" id="aiKeyState">未保存</span>
+            </span>
+          </label>
+          <label class="ai-field">
+            <span>模型</span>
+            <select id="aiModelSelect" class="select-compact"></select>
+          </label>
+        </div>
+        <p class="ai-privacy">Key 只保存在这台设备的浏览器里（localStorage），由浏览器直接发给 api.anthropic.com，不经过本站服务器。建议在 Anthropic Console 为它单独设置消费上限，不要在公用电脑上保存。</p>
+
+        <div class="ai-actions">
+          <button class="btn btn-primary" id="aiRunPendingBtn" type="button">核验未完成的题</button>
+          <button class="btn" id="aiRunFlaggedBtn" type="button">复核有问题的题</button>
+          <button class="btn" id="aiRunAllBtn" type="button">全部重新核验</button>
+          <button class="btn btn-danger-soft" id="aiStopBtn" type="button" hidden>停止</button>
+          <span class="ai-actions-spacer"></span>
+          <button class="text-btn" id="aiExportBtn" type="button">导出结果 JSON</button>
+          <button class="text-btn" id="aiClearBtn" type="button">清除结果</button>
+        </div>
+        <div class="ai-status" id="aiVerifyStatus" role="status">用 Opus 5.5 核验全部 204 题大约需要 $2–4。</div>
+
+        <div class="ai-summary-row" id="aiVerifySummary"></div>
+        <div class="ai-filter-row">
+          <button class="cat-tab is-active" data-ai-filter="problems" type="button">需要看的（不一致 / 存疑 / 出错）</button>
+          <button class="cat-tab" data-ai-filter="agree" type="button">一致</button>
+          <button class="cat-tab" data-ai-filter="all" type="button">全部</button>
+        </div>
+        <div class="ai-list" id="aiVerifyList"></div>
+      </article>
+
       <!-- 阶段 1 子视图切换 -->
       <article class="card">
         <div class="section-head">
@@ -832,5 +878,6 @@
     <script src="./whiteboard.js"></script>
   <script src="./math_tools.js"></script>
   <script src="./app.js"></script>
+  <script type="module" src="./ai_verify.js"></script>
 </body>
 </html>

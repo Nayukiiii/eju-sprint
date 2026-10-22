@@ -1,4 +1,4 @@
-const CACHE = 'eju-sprint-stage3-v3';
+const CACHE = 'eju-sprint-stage3-v4';
 const ASSETS = [
   './',
   './index.html',
@@ -16,6 +16,8 @@ const ASSETS = [
   './mindmap.js',
   './stage1_audit_data.js',
   './app.js',
+  './ai_verify.js',
+  './vendor/anthropic-sdk.js',
   './manifest.webmanifest',
   './icon.svg',
   './icon-192.png',
