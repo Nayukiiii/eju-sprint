@@ -5,7 +5,7 @@ const fs = require('fs');
 const path = require('path');
 
 const ROOT = path.resolve(__dirname, '..');
-const FILES = ['bank.js', 'bank2.js', 'bank_core.js'];
+const FILES = ['bank.js', 'bank2.js', 'bank_core.js', 'bank3.js'];
 const rewrites = require('./bunso_rewrites.js');
 const notes = require('./bunso_option_notes.js');
 
