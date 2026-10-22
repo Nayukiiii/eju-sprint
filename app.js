@@ -2094,13 +2094,13 @@
         </div>
         <div class="stat-item">
           <div class="stat-label">已核实一致（计入掌握率）</div>
-          <div class="stat-val-row"><strong class="stat-val stat-val-ok">${s.verifiedConsistentCount}</strong><span class="stat-sub">真题 16 + 改编 6</span></div>
-          <div class="stat-hint">SymPy + 正解表 + 题库三方一致</div>
+          <div class="stat-val-row"><strong class="stat-val stat-val-ok">${s.verifiedConsistentCount}</strong><span class="stat-sub">真题 ${s.mathRealCount} + 改编 ${s.mathAdaptedCount}</span></div>
+          <div class="stat-hint">原卷正解表逐空核对 + tools/verify_math.py 重算</div>
         </div>
         <div class="stat-item">
-          <div class="stat-label">三者不一致 · 待您裁定</div>
-          <div class="stat-val-row"><strong class="stat-val stat-val-danger">${s.discrepancyCount}</strong><span class="stat-sub">未擅自改动题面</span></div>
-          <div class="stat-hint">含 2025 I問1(1) 等转录偏差</div>
+          <div class="stat-label">不一致 · 待裁定</div>
+          <div class="stat-val-row"><strong class="stat-val stat-val-danger">${s.discrepancyCount}</strong><span class="stat-sub">已全部按原卷修正</span></div>
+          <div class="stat-hint">原 12 道转录偏差已修正</div>
         </div>
         <div class="stat-item">
           <div class="stat-label">未核实（不计入掌握率）</div>
