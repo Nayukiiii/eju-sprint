@@ -47,7 +47,7 @@
     stopTimer();
     const root = $('#mockRoot');
     const list = sittings();
-    const past = (app().getState().mocks || []).filter(m => m.real).slice().reverse().slice(0, 6);
+    const past = (app().getState().mocks || []).filter(m => m.real && m.kind !== 'bunso').slice().reverse().slice(0, 6);
     root.innerHTML = `
       <article class="card">
         <div class="section-head"><div>
@@ -68,7 +68,7 @@
           ${list.map(s => `<button class="mock-sitting" data-sit="${s.id}" type="button">
             <b>${s.label}</b><span>${s.cards.length} 道 · ${blankCount(s.cards)} 空</span></button>`).join('')}
         </div>
-        <p class="stat-hint">文综的仿真卷模考是单独的页面，还没做（任务书见 docs/mock_bunso_prompt.md）。</p>
+        <p class="stat-hint">文综在单独的「文综模考」页（仿真卷，非真题）。</p>
       </article>
       <article class="card">
         <h3 class="section-title">模考记录</h3>

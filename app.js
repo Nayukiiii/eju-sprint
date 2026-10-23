@@ -1450,7 +1450,9 @@
     for (const m of (state.mocks || []).slice().reverse().slice(0, 8)) {
       const row = document.createElement('div');
       row.className = 'mock-row';
-      row.innerHTML = m.real
+      row.innerHTML = m.kind === 'bunso'
+        ? `<span><b>文综仿真卷</b> · 正确 ${m.correct}/${m.total} 题（${m.score}%）</span><span class="stat-hint">${m.note || ''} (${m.date})</span>`
+        : m.real
         ? `<span><b>${m.subject}</b> · 正确 ${m.correct}/${m.total} 空</span><span class="stat-hint">${m.note || ''} (${m.date})</span>`
         : `<span><b>${m.subject}</b> · ${m.score} 分</span><span class="stat-hint">${m.note || ''} (${m.date})</span>`;
       box.appendChild(row);
@@ -2003,6 +2005,8 @@
       window.EJU_HW?.render();
     } else if (route === 'mock') {
       window.EJU_MOCK?.render();
+    } else if (route === 'mockb') {
+      window.EJU_MOCKB?.render();
     } else if (route === 'audit') {
       renderStage1AuditView();
       renderMathIn($('#view-audit'));
@@ -2107,6 +2111,8 @@
     getState: () => state,
     saveState,
     recordCardGrade,
+    recordLangHelp,
+    getLangMode: () => langMode,
     switchRoute,
     renderMath: renderMathIn,
     today: () => localDateKey(),
