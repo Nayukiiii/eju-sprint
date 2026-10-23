@@ -187,6 +187,8 @@
          ═══════════════════════════════════════════════════════════════════ -->
     <section class="view" id="view-math">
       <!-- 统一单套导航：年份 → 题号 (如 2025 · 第1問(1) · 1/34) -->
+      <div class="tutor-type-bar" id="tutorTypeBar" role="group" aria-label="数学题型"></div>
+      <div class="tutor-type-info card" id="tutorTypeInfo" hidden></div>
       <div class="tutor-header-bar card">
         <div class="tutor-nav-left">
           
@@ -789,31 +791,52 @@
 
         <div class="ai-settings">
           <label class="ai-field">
-            <span>Anthropic API Key</span>
+            <span>服务商</span>
+            <select id="aiProviderSelect" class="select-compact"></select>
+          </label>
+          <label class="ai-field">
+            <span>接口地址</span>
+            <input type="text" id="aiBaseInput" spellcheck="false" placeholder="https://api.deepseek.com">
+          </label>
+          <label class="ai-field">
+            <span>模型名（可以手动改）</span>
+            <input type="text" id="aiModelInput" spellcheck="false" placeholder="deepseek-chat">
+          </label>
+          <label class="ai-field">
+            <span>API Key</span>
             <span class="ai-key-row">
-              <input type="password" id="aiKeyInput" autocomplete="off" spellcheck="false" placeholder="sk-ant-…">
+              <input type="password" id="aiKeyInput" autocomplete="off" spellcheck="false" placeholder="sk-…">
               <button class="btn btn-sm" id="aiSaveKeyBtn" type="button">保存</button>
               <button class="text-btn" id="aiForgetKeyBtn" type="button">删除</button>
               <span class="ai-key-state" id="aiKeyState">未保存</span>
             </span>
           </label>
           <label class="ai-field">
-            <span>模型</span>
-            <select id="aiModelSelect" class="select-compact"></select>
+            <span>连接方式</span>
+            <select id="aiViaSelect" class="select-compact">
+              <option value="direct">直连（浏览器直接访问服务商）</option>
+              <option value="relay">经本站中转（直连被浏览器拦截时用）</option>
+            </select>
+          </label>
+          <label class="ai-field">
+            <span>核验范围</span>
+            <select id="aiDeckSelect" class="select-compact"></select>
           </label>
         </div>
-        <p class="ai-privacy">Key 只保存在这台设备的浏览器里（localStorage），由浏览器直接发给 api.anthropic.com，不经过本站服务器。建议在 Anthropic Console 为它单独设置消费上限，不要在公用电脑上保存。</p>
+        <p class="ai-privacy">Key 只保存在这台设备的浏览器里。直连时由浏览器直接发给服务商；若服务商不允许浏览器直接访问（报「跨域」错误），选「经本站中转」：Key 会随请求经过你自己的服务器转发，服务器不保存、不写日志。建议在服务商后台为这个 Key 单独设消费上限，不要在公用电脑上保存。</p>
 
         <div class="ai-actions">
           <button class="btn btn-primary" id="aiRunPendingBtn" type="button">核验未完成的题</button>
           <button class="btn" id="aiRunFlaggedBtn" type="button">复核有问题的题</button>
           <button class="btn" id="aiRunAllBtn" type="button">全部重新核验</button>
+          <button class="btn" id="aiTestBtn" type="button">测试连接</button>
           <button class="btn btn-danger-soft" id="aiStopBtn" type="button" hidden>停止</button>
           <span class="ai-actions-spacer"></span>
+          <button class="text-btn" id="aiRevisionsBtn" type="button">导出修订清单</button>
           <button class="text-btn" id="aiExportBtn" type="button">导出结果 JSON</button>
           <button class="text-btn" id="aiClearBtn" type="button">清除结果</button>
         </div>
-        <div class="ai-status" id="aiVerifyStatus" role="status">用 Opus 5.5 核验全部文综题（约 230 题）大约需要 $2–4；只核验新加的时事题约 $0.3–0.5。</div>
+        <div class="ai-status" id="aiVerifyStatus" role="status">填好服务商、模型和 Key，先点「测试连接」，再核验。DeepSeek 核验全部文综题（约 230 题）通常几块钱人民币以内。</div>
 
         <div class="ai-summary-row" id="aiVerifySummary"></div>
         <div class="ai-filter-row">
@@ -973,6 +996,7 @@
   <script src="./stage1_audit_data.js"></script>
     <script src="./whiteboard.js"></script>
   <script src="./math_tools.js"></script>
+  <script src="./math_types.js"></script>
   <script src="./app.js"></script>
   <script src="./homework.js"></script>
   <script src="./sync.js"></script>

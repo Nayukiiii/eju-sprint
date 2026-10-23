@@ -618,7 +618,22 @@
     return kinds;
   }
 
-  window.EJU_HW = {render, renderBadge, onRemote, boardIdFor};
+  // Teacher shortcut: assign these bank questions straight away (used by the math question-type outline)
+  function quickAssign(cardIds, title) {
+    if (!isTeacher()) return;
+    if (!confirm(`把「${title}」布置给对方？`)) return;
+    const id = newId('hw');
+    hw().assignments[id] = {
+      title, note: '', dueAt: null, dueText: '',
+      items: cardIds.map(cardId => ({id: newId('i'), cardId})),
+      createdAt: Date.now(), by: window.EJU_SYNC?.myName?.() || '',
+    };
+    openId = id;
+    save();
+    document.querySelector('[data-route="homework"]')?.click();
+  }
+
+  window.EJU_HW = {render, renderBadge, onRemote, boardIdFor, quickAssign};
 
   function init() {
     renderBadge();

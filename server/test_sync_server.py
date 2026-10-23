@@ -148,6 +148,15 @@ class SyncServerTest(unittest.TestCase):
         self.assertEqual(res.status, 404)
         conn.close()
 
+    def test_relay_is_login_only_and_host_restricted(self):
+        status, _ = self.call('POST', '/api/v2/relay', {'url': 'https://api.deepseek.com/chat/completions'})
+        self.assertEqual(status, 401)
+        a, _ = self.make_pair()
+        for bad in ['http://api.deepseek.com/x', 'https://evil.example.com/x', 'https://127.0.0.1/x',
+                    'https://api.deepseek.com:8443/x', 'file:///etc/passwd', '']:
+            status, data = self.call('POST', '/api/v2/relay', {'url': bad}, token=a['token'])
+            self.assertEqual(status, 403, bad)
+
     def test_ping_stream_needs_no_token(self):
         conn = http.client.HTTPConnection('127.0.0.1', self.port, timeout=5)
         conn.request('GET', '/api/v2/ping-stream')

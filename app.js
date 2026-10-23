@@ -1481,8 +1481,46 @@
     return `${prefix} · ${c.topic || ''}`;
   }
 
+  // Math tutor filter: by question type, and "core only" = the score-friendly questions
+  let tutorType = '';
+  let tutorCoreOnly = false;
+  function mathTutorPool() {
+    return cards.filter(c => isMathCard(c) && (!tutorType || c.mtype === tutorType) && (!tutorCoreOnly || c.level === 'core'));
+  }
+
+  function renderTutorTypeBar() {
+    const bar = $('#tutorTypeBar');
+    const types = window.EJU_MATH_TYPES || {};
+    if (!bar) return;
+    const count = t => cards.filter(c => isMathCard(c) && c.mtype === t && (!tutorCoreOnly || c.level === 'core')).length;
+    bar.innerHTML = [`<button type="button" class="cat-tab${tutorType ? '' : ' is-active'}" data-mtype="">全部</button>`,
+      ...Object.entries(types).map(([k, t]) => `<button type="button" class="cat-tab${tutorType === k ? ' is-active' : ''}" data-mtype="${k}">${t.short} ${count(k)}</button>`),
+      `<label class="wb-check"><input type="checkbox" id="tutorCoreOnly" ${tutorCoreOnly ? 'checked' : ''}> 只看必拿分</label>`].join('');
+    const info = $('#tutorTypeInfo');
+    const t = types[tutorType];
+    if (!info) return;
+    info.hidden = !t;
+    if (t) {
+      const teacher = window.EJU_SYNC?.isTeacher?.();
+      info.innerHTML = `<h4>${t.label}：解题套路</h4><ol>${t.method.map(m => `<li>${escapeHtml(m)}</li>`).join('')}</ol>
+        <h4>常见错误</h4><ul>${t.mistakes.map(m => `<li>${escapeHtml(m)}</li>`).join('')}</ul>
+        <p class="tutor-type-teach"><b>讲课提示：</b>${escapeHtml(t.teach)}</p>
+        ${teacher ? '<button type="button" class="btn btn-sm btn-primary" id="tutorAssignTypeBtn">把这类必拿分题布置给对方（3 道）</button>' : ''}`;
+    }
+  }
+
+  function setTutorFilter(type, coreOnly) {
+    tutorType = type;
+    tutorCoreOnly = coreOnly;
+    tutorCardIdx = 0;
+    initTutorUnifiedNav();
+    renderTutorTypeBar();
+    renderTutorCard();
+    notifyTutorChanged();
+  }
+
   function initTutorUnifiedNav() {
-    tutorCardsList = cards.filter(isMathCard);
+    tutorCardsList = mathTutorPool();
     const sel = $('#tutorUnifiedSelect');
     if (!sel) return;
     sel.innerHTML = '';
@@ -1583,7 +1621,7 @@
   }
 
   function renderTutorCard() {
-    if (!tutorCardsList.length) tutorCardsList = cards.filter(isMathCard);
+    if (!tutorCardsList.length) tutorCardsList = mathTutorPool();
     if (tutorCardIdx >= tutorCardsList.length) tutorCardIdx = 0;
     if (tutorCardIdx < 0) tutorCardIdx = tutorCardsList.length - 1;
 
@@ -1692,7 +1730,8 @@
   function openMathTutorWithCard(cardId) {
     setPeriodMode('math');
     switchRoute('math');
-    tutorCardsList = cards.filter(isMathCard);
+    tutorCardsList = mathTutorPool();
+    if (!tutorCardsList.some(c => c.id === cardId)) { tutorType = ''; tutorCoreOnly = false; tutorCardsList = mathTutorPool(); renderTutorTypeBar(); initTutorUnifiedNav(); }
     const idx = tutorCardsList.findIndex(c => c.id === cardId);
     if (idx >= 0) tutorCardIdx = idx;
     renderTutorCard();
@@ -2311,6 +2350,20 @@
     // Stage 3 Math Tutoring Station controls (Unified Nav & Whiteboard Bridge)
     initTutorUnifiedNav();
 
+    renderTutorTypeBar();
+    $('#tutorTypeBar')?.addEventListener('click', e => {
+      const b = e.target.closest('[data-mtype]');
+      if (b) setTutorFilter(b.dataset.mtype, tutorCoreOnly);
+    });
+    $('#tutorTypeBar')?.addEventListener('change', e => {
+      if (e.target.id === 'tutorCoreOnly') setTutorFilter(tutorType, e.target.checked);
+    });
+    $('#tutorTypeInfo')?.addEventListener('click', e => {
+      if (!e.target.closest('#tutorAssignTypeBtn')) return;
+      const ids = cards.filter(c => c.mtype === tutorType && c.level === 'core').slice(0, 3).map(c => c.id);
+      if (!ids.length) return;
+      window.EJU_HW?.quickAssign(ids, `${window.EJU_MATH_TYPES[tutorType].label} 必拿分 ${ids.length} 题`);
+    });
     $('#tutorUnifiedSelect')?.addEventListener('change', e => {
       tutorCardIdx = Number(e.target.value) || 0;
       renderTutorCard();
@@ -2496,7 +2549,8 @@
     });
     $('#wrongPracticeMathBtn').addEventListener('click', () => {
       setPeriodMode('math');
-      tutorCardsList = cards.filter(isMathCard);
+      tutorType = ''; tutorCoreOnly = false;
+      tutorCardsList = mathTutorPool();
       const firstWrongIdx = tutorCardsList.findIndex(c => isWrong(c) || isBookmarked(c));
       if (firstWrongIdx >= 0) tutorCardIdx = firstWrongIdx;
       switchRoute('math');
