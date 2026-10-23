@@ -42,7 +42,7 @@
       <button class="nav-tab" data-route="homework" type="button"><span class="nav-full">作业</span><span class="nav-short">作业</span> <span class="nav-badge" id="navHwBadge" hidden>0</span></button>
       <button class="nav-tab" data-route="wrong" type="button"><span class="nav-full">错题本</span><span class="nav-short">错题</span> <span class="nav-badge" id="navWrongBadge">0</span></button>
       <button class="nav-tab" data-route="plan" type="button"><span class="nav-full">17天方案</span><span class="nav-short">方案</span> <span class="nav-badge nav-badge-ok" id="navPlanBadge">0%</span></button>
-      <button class="nav-tab" data-route="audit" type="button"><span class="nav-full">阶段1核验报告</span><span class="nav-short">核验</span> <span class="nav-badge nav-badge-ok" id="navAuditBadge">34/34 已核</span></button>
+      <button class="nav-tab" data-route="audit" type="button"><span class="nav-full">阶段1核验报告</span><span class="nav-short">核验</span> <span class="nav-badge nav-badge-ok" id="navAuditBadge"></span></button>
     </nav>
   </header>
 
@@ -852,10 +852,10 @@
         <div class="section-head">
           <div>
             <h2 class="section-title">阶段 1：答案与题面正确性核验台</h2>
-            <p class="section-sub">全部数学题均经 SymPy 独立重算并与官方〈数学〉コース1 正解表逐空比对；不一致项原样保留供您裁定，未核实题目不计入掌握率</p>
+            <p class="section-sub">全部数学题均经 SymPy 独立重算并与官方〈数学〉コース1 正解表逐空比对</p>
           </div>
           <div class="cat-tabs" id="auditMainTabs">
-            <button class="cat-tab is-active" data-audit-tab="table" type="button">1. 官方正解表 &amp; SymPy 对照表 (34题)</button>
+            <button class="cat-tab is-active" data-audit-tab="table" type="button">1. 官方正解表 &amp; SymPy 对照表 (<span id="auditMathCount">58</span>题)</button>
             <button class="cat-tab" data-audit-tab="sbs" type="button">2. 原卷截图 | 网页题面 并排抽检 (20题)</button>
             <button class="cat-tab" data-audit-tab="unverified" type="button">3. 未核实清单 (227) &amp; 已删自编题 (72)</button>
           </div>

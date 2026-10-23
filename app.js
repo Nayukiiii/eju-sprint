@@ -116,6 +116,9 @@
     return !isUnverified(card);
   }
 
+  const isPracticed = card => Boolean(state.progress[card.id]);
+  const isLearned = card => (getProgress(card).box || 0) >= 2;
+
   function isMastered(card) {
     if (!isCountedForMastery(card)) return false;
     return getProgress(card).box >= 2;
@@ -399,7 +402,10 @@
     $('#statMasteryBar').style.width = `${masteryPct}%`;
 
     $('#navWrongBadge').textContent = String(wrongCount);
-    $('#navPlanBadge').textContent = `${masteryPct}%`;
+    const planDone = cards.filter(isPracticed).length;
+    $('#navPlanBadge').textContent = `${Math.round((planDone / cards.length) * 100)}%`;
+    const audit = window.EJU_STAGE1_AUDIT?.summary;
+    if (audit && $('#navAuditBadge')) $('#navAuditBadge').textContent = `${audit.verifiedConsistentCount}/${audit.mathTotal} 已核`;
     $('#tutorQueueBadge').textContent = String(tutorBookmarkCount);
 
     const hasResumable = state.activeSession && Array.isArray(state.activeSession.ids) && state.activeSession.index < state.activeSession.ids.length;
@@ -444,7 +450,9 @@
       const mastered = verifiedPool.filter(isMastered).length;
       const wrong = pool.filter(isWrong).length;
       const hasVerified = verifiedPool.length > 0;
-      const pct = hasVerified ? Math.round((mastered / verifiedPool.length) * 100) : 0;
+      // The bar shows how much of this subject has been practised, so it moves for 未核实 subjects too
+      const done = pool.filter(isPracticed).length;
+      const pct = Math.round((done / total) * 100);
 
       const btn = document.createElement('button');
       btn.type = 'button';
@@ -452,15 +460,13 @@
       btn.innerHTML = `
         <div class="deck-chip-top">
           <span>${def.label} <small class="jp-sub">${DECK_JP_SUB[def.id] || ''}</small></span>
-          ${hasVerified
-            ? `<span class="deck-chip-pct">${pct}%</span>`
-            : `<span class="deck-chip-pct">${total} 题</span>`}
+          <span class="deck-chip-pct">${done}/${total}</span>
         </div>
         <div class="mini-bar mini-bar-ok"><span style="width:${pct}%"></span></div>
         <div class="deck-chip-sub">${
           hasVerified
             ? `已核实掌握 ${mastered}/${verifiedPool.length}${unverifiedInPool ? ` · 未核实 ${unverifiedInPool}` : ''}${wrong ? ` · 错题 ${wrong}` : ''}`
-            : (wrong ? `错题 ${wrong}` : '')
+            : `做过 ${done} · 掌握 ${pool.filter(isLearned).length}${wrong ? ` · 错题 ${wrong}` : ''}`
         }</div>
       `;
       btn.addEventListener('click', () => {
@@ -1315,7 +1321,7 @@
         modules: [
           {label: '日本政治', filter: c => c.deck === '政治'},
           {label: '条约对比', filter: c => c.deck === '条約'},
-          {label: '数学·二次函数与数式', filter: c => isMathCard(c) && /2次|数と式|因数|命題/.test(`${c.topic} ${c.q}`)}
+          {label: '数学·二次函数与数式', filter: c => isMathCard(c) && (c.mtype ? ['quad', 'expr', 'ineq'].includes(c.mtype) : /2次|数と式|因数|命題/.test(`${c.topic} ${c.q}`))}
         ]
       },
       {
@@ -1326,7 +1332,7 @@
         modules: [
           {label: '地理与统计', filter: c => c.deck === '地理'},
           {label: '宏观经济', filter: c => c.deck === '経済'},
-          {label: '数学·三角几何与概率整数', filter: c => isMathCard(c) && /図形|三角|余弦|正弦|確率|場合|整数/.test(`${c.topic} ${c.q}`)}
+          {label: '数学·三角几何与概率整数', filter: c => isMathCard(c) && (c.mtype ? ['geo', 'prob', 'int'].includes(c.mtype) : /図形|三角|余弦|正弦|確率|場合|整数/.test(`${c.topic} ${c.q}`))}
         ]
       },
       {
@@ -1358,21 +1364,19 @@
 
     for (const st of stageDefs) {
       const isCurrent = today >= st.start && today <= st.end;
+      // Plan progress counts every question (verified or not): "done" = answered at least once,
+      // "learned" = answered right on two different days (box ≥ 2). 掌握率 elsewhere still counts only verified ones.
       const allStageCards = cards.filter(c => st.modules.some(m => m.filter(c)));
-      const verifiedStageCards = allStageCards.filter(isCountedForMastery);
-      const stageMastered = verifiedStageCards.filter(isMastered).length;
-      const stagePct = verifiedStageCards.length ? Math.round((stageMastered / verifiedStageCards.length) * 100) : 0;
+      const stageDone = allStageCards.filter(isPracticed).length;
+      const stageLearned = allStageCards.filter(isLearned).length;
+      const stagePct = allStageCards.length ? Math.round((stageDone / allStageCards.length) * 100) : 0;
 
       const cardEl = document.createElement('div');
       cardEl.className = `phase-card${isCurrent ? ' is-current' : ''}`;
       cardEl.innerHTML = `
         <div class="phase-head">
           <span class="phase-title">${st.title}</span>
-          <span class="tag${isCurrent ? '' : ' tag-subtle'}">${isCurrent ? '当前阶段' : `${st.start} ~ ${st.end}`} · ${
-            verifiedStageCards.length
-              ? `已核实进度 ${stagePct}% (${stageMastered}/${verifiedStageCards.length})`
-              : `本组共 ${allStageCards.length} 题（均未核实·不计掌握率）`
-          }</span>
+          <span class="tag${isCurrent ? '' : ' tag-subtle'}">${isCurrent ? '当前阶段' : `${st.start} ~ ${st.end}`} · 做过 ${stagePct}%（${stageDone}/${allStageCards.length}）· 掌握 ${stageLearned}</span>
         </div>
         <p class="phase-desc">${st.desc}</p>
         <div class="phase-modules-grid"></div>
@@ -1381,22 +1385,22 @@
       const grid = cardEl.querySelector('.phase-modules-grid');
       for (const mod of st.modules) {
         const pool = cards.filter(mod.filter);
-        const verifiedPool = pool.filter(isCountedForMastery);
-        const mCount = verifiedPool.filter(isMastered).length;
-        const unmastered = pool.filter(c => !isMastered(c));
-        const hasVerified = verifiedPool.length > 0;
-        const pct = hasVerified ? Math.round((mCount / verifiedPool.length) * 100) : 0;
+        const done = pool.filter(isPracticed).length;
+        const learned = pool.filter(isLearned).length;
+        const unmastered = pool.filter(c => !isLearned(c));
+        const pct = pool.length ? Math.round((done / pool.length) * 100) : 0;
+        const unverified = pool.some(isUnverified);
 
         const modBox = document.createElement('div');
         modBox.className = 'phase-mod-box';
         modBox.innerHTML = `
           <div class="phase-mod-top">
             <span>${mod.label}</span>
-            <span>${hasVerified ? `${pct}%` : '未核实'}</span>
+            <span>${pct}%</span>
           </div>
           <div class="mini-bar mini-bar-ok"><span style="width:${pct}%"></span></div>
           <div class="phase-mod-foot">
-            <span>${hasVerified ? `已核实掌握 ${mCount} / ${verifiedPool.length} 题` : `${pool.length} 题`}</span>
+            <span>做过 ${done}/${pool.length} · 掌握 ${learned}${unverified ? ' · 未核实' : ''}</span>
             ${pool.length ? `<button class="text-btn" type="button">${unmastered.length ? `去练习 (${unmastered.length})` : '复习本组'}</button>` : ''}
           </div>
         `;
@@ -1768,7 +1772,7 @@
         <div class="stat-item">
           <div class="stat-label">不一致 · 待裁定</div>
           <div class="stat-val-row"><strong class="stat-val stat-val-danger">${s.discrepancyCount}</strong><span class="stat-sub">已全部按原卷修正</span></div>
-          <div class="stat-hint">原 12 道转录偏差已修正</div>
+          <div class="stat-hint">数学题已按原卷重新转写</div>
         </div>
         <div class="stat-item">
           <div class="stat-label">未核实（不计入掌握率）</div>

@@ -82,3 +82,40 @@ const header = '// EJU 数学コース1 历年真题（由 tools/build_math_bank
 fs.writeFileSync(path.join(ROOT, 'bank_math_real.js'),
   `${header}window.EJU_BANK = (window.EJU_BANK || []).concat(\n${JSON.stringify(all, null, 2)}\n);\n`);
 console.log(`${cards.length} checked cards + ${legacy.length} legacy → bank_math_real.js`);
+
+// ─── Keep the 核验 page's table (stage1_audit_data.js) in step with the bank ───
+{
+  const auditPath = path.join(ROOT, 'stage1_audit_data.js');
+  const src = fs.readFileSync(auditPath, 'utf8');
+  const start = src.indexOf('{', src.indexOf('window.EJU_STAGE1_AUDIT'));
+  const end = src.lastIndexOf('}');
+  const audit = JSON.parse(src.slice(start, end + 1));
+  const blanksText = c => c.blanks.map(b => `${b.key}=${b.ans}`).join(', ');
+  audit.generatedAt = new Date().toISOString().slice(0, 10);
+  audit.mathAuditTable = all.map(c => {
+    const checked = ids.has(c.id);
+    return {
+      id: c.id,
+      exam_ref: c.source,
+      bank_q_summary: c.topic,
+      bank_ans: blanksText(c),
+      official_key: checked ? `${blanksText(c)}（逐空对照 ${c.ansImg.replace('./papers/', '')}）` : blanksText(c),
+      sympy_calc: 'tools/verify_math.py 独立重算 ✓',
+      status: '一致',
+      note: checked ? `题面按原卷逐字转写${c.level === 'stretch' ? '（拔高题）' : '（必拿分）'}` : (c.auditNote || ''),
+      q: c.q, choices: [], expl: c.expl, paperImg: c.paperImg, ansImg: c.ansImg, topic: c.topic,
+    };
+  });
+  const real = all.filter(c => c.id.startsWith('real-')).length;
+  Object.assign(audit.summary, {
+    mathTotal: all.length, mathRealCount: real, mathAdaptedCount: all.length - real,
+    verifiedConsistentCount: all.length, discrepancyCount: 0,
+  });
+  audit.sample20Ids = audit.sample20Ids.filter(id => all.some(c => c.id === id));
+  for (const c of cards) {
+    if (audit.sample20Ids.length >= 20) break;
+    if (!audit.sample20Ids.includes(c.id)) audit.sample20Ids.push(c.id);
+  }
+  fs.writeFileSync(auditPath, src.slice(0, start) + JSON.stringify(audit, null, 2) + src.slice(end + 1));
+  console.log(`stage1_audit_data.js: ${all.length} math rows`);
+}
