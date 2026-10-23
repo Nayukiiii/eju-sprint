@@ -10,7 +10,8 @@
   let activeCardId = null;
 
   // Drawing state
-  let currentMode = 'pen'; // 'pen' | 'marker' | 'eraser' | 'lasso'
+  let currentMode = 'pen'; // pen | marker | eraser | lasso | pan | laser | line | circle | axes | text
+  const SHAPE_MODES = ['line', 'circle', 'axes'];
   let currentColor = '#23304A'; // '#23304A' (黑) | '#D67052' (赤陶) | '#2F4A7A' (蓝)
   let currentWidth = 2; // 2 (细) | 4 (中) | 8 (粗)
   let currentBg = 'grid'; // 'blank' | 'lined' | 'grid' | 'axes'
@@ -26,7 +27,9 @@
   let startPanY = 0;
 
   // Strokes data model: Array of strokes
-  // Stroke: { id, mode, color, width, alpha, points: [{x, y, p}], type: 'path' | 'stamp' }
+  // Stroke: { id, mode, color, width, alpha, points: [{x, y, p}], t (start ms), d (duration ms),
+  //           shape?: 'line' | 'circle' | 'axes' (two points: start/centre/origin and end/edge/extent) }
+  // Stamp:  { id, type: 'stamp', kind?: 'text' | 'image', x, y, w, h, ... }
   let strokes = [];
   let undoStack = [];
   let redoStack = [];
@@ -45,6 +48,19 @@
 
   // Ugee M708 Barrel Button / Stylus Detection
   let barrelButtonEraserEnabled = true;
+  // 防误触: fingers / palm on a touch screen pan instead of drawing; only the pen writes
+  let penOnly = false;
+  try { penOnly = localStorage.getItem('eju_wb_pen_only') === '1'; } catch (_) {}
+
+  // Laser pointer trails (mine and the partner's), not saved: memberId -> [{x, y, at}]
+  const LASER_MS = 1400;
+  const laserTrails = {};
+  // "Look here" rings: [{x, y, at}]
+  let flashes = [];
+  let animFrame = null;
+  // Replay of the board in drawing order (null when not replaying)
+  let replay = null;
+  const images = {}; // src -> HTMLImageElement
 
   // Auto-save timer
   let autoSaveTimeout = null;
@@ -128,8 +144,10 @@
 
     const coords = getCanvasCoords(e);
 
-    // Space + drag, pan mode, or middle mouse button -> pan infinite canvas
-    if (isSpacePressed || currentMode === 'pan' || e.button === 1) {
+    if (replay) stopReplay();
+
+    // Space + drag, pan mode, middle mouse button, or a finger while 防误触 is on -> pan infinite canvas
+    if (isSpacePressed || currentMode === 'pan' || e.button === 1 || (penOnly && e.pointerType === 'touch')) {
       isPanning = true;
       startPanX = coords.screenX - panX;
       startPanY = coords.screenY - panY;
@@ -143,6 +161,21 @@
     let effectiveMode = currentMode;
     if (barrelButtonEraserEnabled && (e.buttons === 2 || e.buttons === 32 || e.button === 2 || e.button === 5)) {
       effectiveMode = 'eraser';
+    }
+
+    if (effectiveMode === 'laser') {
+      isDrawing = true;
+      addLaserPoint('me', coords.x, coords.y);
+      if (activeCardId) hooks.onLaser?.(activeCardId, {x: coords.x, y: coords.y});
+      e.preventDefault();
+      return;
+    }
+
+    if (effectiveMode === 'text') {
+      e.preventDefault();
+      // Let the pointer sequence finish before the prompt blocks the page
+      setTimeout(() => addTextStamp(coords.x, coords.y), 0);
+      return;
     }
 
     if (effectiveMode === 'lasso') {
@@ -166,14 +199,19 @@
     preActionSnapshot = JSON.stringify(strokes);
     didModifyInAction = false;
 
+    const shape = SHAPE_MODES.includes(effectiveMode) ? effectiveMode : null;
     currentStroke = {
       id: 'str_' + Date.now() + '_' + Math.random().toString(36).slice(2, 6),
-      mode: effectiveMode,
+      mode: shape ? 'pen' : effectiveMode,
       color: currentColor,
       width: currentWidth,
       alpha: effectiveMode === 'marker' ? 0.35 : 1.0,
-      points: [{ x: coords.x, y: coords.y, p: coords.p }]
+      t: Date.now(),
+      points: shape
+        ? [{ x: coords.x, y: coords.y, p: 0.5 }, { x: coords.x, y: coords.y, p: 0.5 }]
+        : [{ x: coords.x, y: coords.y, p: coords.p }]
     };
+    if (shape) currentStroke.shape = shape;
 
     if (effectiveMode === 'eraser') {
       eraseAt(coords.x, coords.y);
@@ -197,6 +235,21 @@
 
     if (!isDrawing && !isDraggingSelection) {
       if (activeCardId) hooks.onPointer?.(activeCardId, {x: coords.x, y: coords.y});
+      return;
+    }
+
+    if (currentMode === 'laser' && isDrawing) {
+      addLaserPoint('me', coords.x, coords.y);
+      if (activeCardId) hooks.onLaser?.(activeCardId, {x: coords.x, y: coords.y});
+      e.preventDefault();
+      return;
+    }
+
+    if (currentStroke?.shape) {
+      currentStroke.points[1] = snapShapeEnd(currentStroke, coords, e.shiftKey);
+      if (activeCardId) hooks.onLive?.(activeCardId, currentStroke);
+      redrawCanvas();
+      e.preventDefault();
       return;
     }
 
@@ -274,6 +327,11 @@
       return;
     }
 
+    if (currentMode === 'laser' && isDrawing) {
+      isDrawing = false;
+      return;
+    }
+
     if (isDraggingSelection) {
       isDraggingSelection = false;
       if (didModifyInAction && preActionSnapshot) {
@@ -299,10 +357,11 @@
           pushRawUndoSnapshot(preActionSnapshot);
           saveNow();
         }
-      } else if (currentStroke.points.length > 0) {
+      } else if (currentStroke.points.length > 0 && !isTinyShape(currentStroke)) {
         if (preActionSnapshot) {
           pushRawUndoSnapshot(preActionSnapshot);
         }
+        currentStroke.d = Date.now() - (currentStroke.t || Date.now());
         strokes.push(currentStroke);
         saveNow();
       }
@@ -361,6 +420,10 @@
       setMode('eraser');
     } else if (e.key === 'l' || e.key === 'L') {
       setMode('lasso');
+    } else if (e.key === 'r' || e.key === 'R') {
+      setMode('laser');
+    } else if (e.key === 't' || e.key === 'T') {
+      setMode('text');
     } else if (e.key === '[') {
       const widths = [2, 4, 8];
       const idx = widths.indexOf(currentWidth);
@@ -399,16 +462,15 @@
     ctx.strokeStyle = stroke.color;
     ctx.globalAlpha = stroke.alpha || 1.0;
 
-    const p0 = pts[pts.length - 2];
-    const p1 = pts[pts.length - 1];
-
-    // Ugee M708 pressure modulation
-    const width = stroke.width * (0.35 + 1.3 * (p1.p || 0.5));
-    ctx.lineWidth = width;
-
+    // Smooth: curve from the midpoint of the previous segment to the midpoint of this one
+    const n = pts.length;
+    const p1 = pts[n - 2];
+    const p2 = pts[n - 1];
+    const p0 = n > 2 ? pts[n - 3] : p1;
+    ctx.lineWidth = stroke.width * (0.35 + 1.3 * (p1.p || 0.5));
     ctx.beginPath();
-    ctx.moveTo(p0.x, p0.y);
-    ctx.lineTo(p1.x, p1.y);
+    ctx.moveTo((p0.x + p1.x) / 2, (p0.y + p1.y) / 2);
+    ctx.quadraticCurveTo(p1.x, p1.y, (p1.x + p2.x) / 2, (p1.y + p2.y) / 2);
     ctx.stroke();
 
     ctx.restore();
@@ -425,9 +487,20 @@
     ctx.translate(panX, panY);
     ctx.scale(scale, scale);
 
+    if (replay) {
+      renderReplayFrame();
+      ctx.restore();
+      return;
+    }
+
+    // Pasted images (original exam pages, photos) sit under all ink, whoever pasted them
+    const isImage = str => str.kind === 'image';
+    if (showPartners) for (const layer of partnerLayers) for (const str of layer.strokes) if (isImage(str)) renderSingleStroke(str, false, true);
+    if (showMine) for (const str of strokes) if (isImage(str)) renderSingleStroke(str, selectedStrokes.includes(str));
+
     if (showPartners) {
       for (const layer of partnerLayers) {
-        for (const str of layer.strokes) renderSingleStroke(str, false, true);
+        for (const str of layer.strokes) if (!isImage(str)) renderSingleStroke(str, false, true);
       }
       for (const live of Object.values(liveStrokes)) {
         if (live && live.mode !== 'eraser') renderSingleStroke(live, false, true);
@@ -436,7 +509,7 @@
 
     if (showMine) {
       for (const str of strokes) {
-        renderSingleStroke(str, selectedStrokes.includes(str));
+        if (!isImage(str)) renderSingleStroke(str, selectedStrokes.includes(str));
       }
     }
 
@@ -445,6 +518,8 @@
     }
 
     if (showPartners) renderPointers();
+    renderLasers();
+    renderFlashes();
 
     if (currentMode === 'lasso' && lassoPoints.length > 1) {
       renderLassoPolygon();
@@ -551,6 +626,11 @@
     const pts = str.points;
     if (!pts || !pts.length) return;
 
+    if (str.shape) {
+      renderShape(str, isSelected, isPartner);
+      return;
+    }
+
     // The partner's ink keeps its colour but sits on a soft mustard halo, so layers are told apart
     if (isPartner && str.mode !== 'marker') {
       ctx.save();
@@ -605,18 +685,331 @@
       return;
     }
 
-    // Pen with pressure sensitivity
+    // Pen with pressure sensitivity, smoothed: quadratic curves through segment midpoints
     for (let i = 0; i < pts.length - 1; i++) {
-      const p0 = pts[i];
-      const p1 = pts[i + 1];
-      const w = str.width * (0.35 + 1.3 * (p1.p || 0.5));
+      const p0 = i > 0 ? pts[i - 1] : pts[i];
+      const p1 = pts[i];
+      const p2 = pts[i + 1];
+      const w = str.width * (0.35 + 1.3 * (p2.p || 0.5));
       ctx.lineWidth = isSelected ? w + 1.5 : w;
       ctx.beginPath();
-      ctx.moveTo(p0.x, p0.y);
-      ctx.lineTo(p1.x, p1.y);
+      ctx.moveTo(i > 0 ? (p0.x + p1.x) / 2 : p1.x, i > 0 ? (p0.y + p1.y) / 2 : p1.y);
+      if (i === pts.length - 2) ctx.quadraticCurveTo(p1.x, p1.y, p2.x, p2.y);
+      else ctx.quadraticCurveTo(p1.x, p1.y, (p1.x + p2.x) / 2, (p1.y + p2.y) / 2);
       ctx.stroke();
     }
     ctx.restore();
+  }
+
+  // ─── Shapes: straight line, circle, coordinate axes (stored as two points) ───
+  function snapShapeEnd(stroke, coords, free) {
+    const a = stroke.points[0];
+    let {x, y} = coords;
+    if (stroke.shape === 'line' && !free) {
+      // Snap to horizontal / vertical / 45° when close, so 補助線 come out straight
+      const ang = Math.atan2(y - a.y, x - a.x);
+      const snapped = Math.round(ang / (Math.PI / 4)) * (Math.PI / 4);
+      if (Math.abs(ang - snapped) < 0.07) {
+        const len = Math.hypot(x - a.x, y - a.y);
+        x = a.x + len * Math.cos(snapped);
+        y = a.y + len * Math.sin(snapped);
+      }
+    }
+    return {x, y, p: 0.5};
+  }
+
+  function isTinyShape(str) {
+    if (!str.shape) return false;
+    const [a, b] = str.points;
+    return Math.hypot(b.x - a.x, b.y - a.y) < 4;
+  }
+
+  function shapePaths(str) {
+    const [a, b] = str.points;
+    if (str.shape === 'line') return [[a, b]];
+    if (str.shape === 'circle') {
+      const r = Math.hypot(b.x - a.x, b.y - a.y);
+      const pts = [];
+      for (let i = 0; i <= 72; i++) {
+        const t = (i / 72) * Math.PI * 2;
+        pts.push({x: a.x + r * Math.cos(t), y: a.y + r * Math.sin(t)});
+      }
+      return [pts];
+    }
+    // axes: origin a, half-extent |b - a| on each axis, arrowheads on +x and +y
+    const ex = Math.max(20, Math.abs(b.x - a.x));
+    const ey = Math.max(20, Math.abs(b.y - a.y));
+    const h = 9;
+    return [
+      [{x: a.x - ex, y: a.y}, {x: a.x + ex, y: a.y}],
+      [{x: a.x, y: a.y + ey}, {x: a.x, y: a.y - ey}],
+      [{x: a.x + ex - h, y: a.y - h * 0.6}, {x: a.x + ex, y: a.y}, {x: a.x + ex - h, y: a.y + h * 0.6}],
+      [{x: a.x - h * 0.6, y: a.y - ey + h}, {x: a.x, y: a.y - ey}, {x: a.x + h * 0.6, y: a.y - ey + h}]
+    ];
+  }
+
+  function renderShape(str, isSelected, isPartner) {
+    const paths = shapePaths(str);
+    const w = str.width * 1.0;
+    const tracePaths = () => {
+      ctx.beginPath();
+      for (const path of paths) {
+        ctx.moveTo(path[0].x, path[0].y);
+        for (let i = 1; i < path.length; i++) ctx.lineTo(path[i].x, path[i].y);
+      }
+      ctx.stroke();
+    };
+    ctx.save();
+    ctx.lineCap = 'round';
+    ctx.lineJoin = 'round';
+    if (isPartner) {
+      ctx.strokeStyle = 'rgba(240, 184, 87, 0.45)';
+      ctx.lineWidth = w * 1.6 + 6;
+      tracePaths();
+    }
+    ctx.strokeStyle = isSelected ? '#D67052' : str.color;
+    ctx.lineWidth = isSelected ? w + 1.5 : w;
+    tracePaths();
+    if (str.shape === 'axes') {
+      const [a, b] = str.points;
+      const ex = Math.max(20, Math.abs(b.x - a.x));
+      const ey = Math.max(20, Math.abs(b.y - a.y));
+      ctx.fillStyle = str.color;
+      ctx.font = 'italic 15px "Times New Roman", serif';
+      ctx.fillText('x', a.x + ex - 4, a.y + 18);
+      ctx.fillText('y', a.x + 8, a.y - ey + 6);
+      ctx.fillText('O', a.x - 15, a.y + 16);
+    }
+    ctx.restore();
+  }
+
+  function distToSegment(x, y, a, b) {
+    const dx = b.x - a.x;
+    const dy = b.y - a.y;
+    const len2 = dx * dx + dy * dy;
+    const t = len2 ? Math.max(0, Math.min(1, ((x - a.x) * dx + (y - a.y) * dy) / len2)) : 0;
+    return Math.hypot(x - (a.x + t * dx), y - (a.y + t * dy));
+  }
+
+  function strokeHit(str, x, y, r) {
+    if (str.shape) {
+      return shapePaths(str).some(path => path.some((pt, i) => i > 0 && distToSegment(x, y, path[i - 1], pt) <= r));
+    }
+    return (str.points || []).some(pt => Math.hypot(pt.x - x, pt.y - y) <= r);
+  }
+
+  // ─── Text and images on the board (stamps) ───
+  function addTextStamp(x, y) {
+    const text = window.prompt('写在白板上的文字（可以多行，用 / 分行）：', '');
+    if (!text || !text.trim()) return;
+    const lines = text.split('/').map(s => s.trim()).filter(Boolean);
+    ctx.save();
+    ctx.font = TEXT_FONT;
+    const w = Math.max(...lines.map(l => ctx.measureText(l).width)) + 8;
+    ctx.restore();
+    pushUndoState();
+    strokes.push({
+      id: 'txt_' + Date.now(), type: 'stamp', kind: 'text', lines, color: currentColor,
+      x, y: y - 18, w, h: lines.length * 26 + 8, t: Date.now()
+    });
+    redrawCanvas();
+    saveNow();
+  }
+
+  // Put an image (e.g. the question's original page) on the board, at the top-left of the current view
+  function addImageStamp(src, title) {
+    loadImage(src, img => {
+      const w = Math.min(640, img.naturalWidth || 640);
+      const h = img.naturalWidth ? w * img.naturalHeight / img.naturalWidth : 400;
+      pushUndoState();
+      strokes.push({
+        id: 'img_' + Date.now(), type: 'stamp', kind: 'image', src, title: title || '',
+        x: -panX / scale + 20, y: -panY / scale + 20, w, h, t: Date.now()
+      });
+      redrawCanvas();
+      saveNow();
+    });
+  }
+
+  function loadImage(src, onReady) {
+    let img = images[src];
+    if (!img) {
+      img = images[src] = new Image();
+      img.onload = () => { redrawCanvas(); onReady?.(img); onReady = null; };
+      img.src = src;
+    } else if (img.complete && img.naturalWidth) {
+      onReady?.(img);
+    } else if (onReady) {
+      img.addEventListener('load', () => onReady(img), {once: true});
+    }
+    return img;
+  }
+
+  const TEXT_FONT = '20px "PingFang SC", "Microsoft YaHei", "Hiragino Sans", sans-serif';
+
+  // ─── Laser pointer & "look here" (drawn on top, fade out, never saved) ───
+  function addLaserPoint(memberId, x, y) {
+    const trail = (laserTrails[memberId] = laserTrails[memberId] || []);
+    trail.push({x, y, at: Date.now()});
+    if (trail.length > 300) trail.splice(0, trail.length - 300);
+    startAnimating();
+  }
+
+  function flashAt(x, y) {
+    flashes.push({x, y, at: Date.now()});
+    startAnimating();
+  }
+
+  function startAnimating() {
+    if (animFrame) return;
+    const tick = () => {
+      animFrame = null;
+      const now = Date.now();
+      for (const id of Object.keys(laserTrails)) {
+        laserTrails[id] = laserTrails[id].filter(p => now - p.at < LASER_MS);
+        if (!laserTrails[id].length) delete laserTrails[id];
+      }
+      flashes = flashes.filter(f => now - f.at < 1800);
+      redrawCanvas();
+      if (Object.keys(laserTrails).length || flashes.length || replay) animFrame = requestAnimationFrame(tick);
+    };
+    animFrame = requestAnimationFrame(tick);
+  }
+
+  function renderLasers() {
+    const now = Date.now();
+    for (const trail of Object.values(laserTrails)) {
+      for (let i = 1; i < trail.length; i++) {
+        const age = (now - trail[i].at) / LASER_MS;
+        if (age >= 1) continue;
+        ctx.save();
+        ctx.strokeStyle = `rgba(230, 40, 40, ${0.85 * (1 - age)})`;
+        ctx.shadowColor = 'rgba(255, 60, 60, 0.9)';
+        ctx.shadowBlur = 12;
+        ctx.lineCap = 'round';
+        ctx.lineWidth = 5 / scale;
+        ctx.beginPath();
+        ctx.moveTo(trail[i - 1].x, trail[i - 1].y);
+        ctx.lineTo(trail[i].x, trail[i].y);
+        ctx.stroke();
+        ctx.restore();
+      }
+      const last = trail[trail.length - 1];
+      if (last && now - last.at < LASER_MS) {
+        ctx.save();
+        ctx.fillStyle = 'rgba(230, 40, 40, 0.95)';
+        ctx.shadowColor = 'rgba(255, 60, 60, 1)';
+        ctx.shadowBlur = 16;
+        ctx.beginPath();
+        ctx.arc(last.x, last.y, 6 / scale, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.restore();
+      }
+    }
+  }
+
+  function renderFlashes() {
+    const now = Date.now();
+    for (const f of flashes) {
+      const k = (now - f.at) / 1800;
+      for (const delay of [0, 0.3]) {
+        const t = k - delay;
+        if (t < 0 || t > 0.7) continue;
+        ctx.save();
+        ctx.strokeStyle = `rgba(214, 112, 82, ${1 - t / 0.7})`;
+        ctx.lineWidth = 3 / scale;
+        ctx.beginPath();
+        ctx.arc(f.x, f.y, (12 + 70 * t) / scale, 0, Math.PI * 2);
+        ctx.stroke();
+        ctx.restore();
+      }
+    }
+  }
+
+  // ─── Replay: redraw every stroke (both layers) in the order it was written ───
+  function boardTimeline() {
+    const items = [];
+    if (showPartners) for (const layer of partnerLayers) for (const s of layer.strokes) items.push({s, partner: true});
+    if (showMine) for (const s of strokes) items.push({s, partner: false});
+    // Images first (they sit under the ink), then strokes in writing order
+    items.sort((a, b) => (b.s.kind === 'image') - (a.s.kind === 'image') || (a.s.t || 0) - (b.s.t || 0));
+    // Compress pauses: each stroke takes its own drawing time (at most 2.5 s), with 0.25 s between strokes
+    let clock = 0;
+    for (const it of items) {
+      it.start = clock;
+      it.dur = it.s.type === 'stamp' || it.s.shape ? 250 : Math.min(2500, Math.max(150, it.s.d || 400));
+      clock += it.dur + 250;
+    }
+    return {items, total: clock};
+  }
+
+  function startReplay(speed = 1) {
+    const timeline = boardTimeline();
+    if (!timeline.items.length) return false;
+    replay = {...timeline, speed, startedAt: Date.now()};
+    hooks.onReplay?.(true);
+    startAnimating();
+    return true;
+  }
+
+  function stopReplay() {
+    if (!replay) return;
+    replay = null;
+    hooks.onReplay?.(false);
+    redrawCanvas();
+  }
+
+  function renderReplayFrame() {
+    const elapsed = (Date.now() - replay.startedAt) * replay.speed;
+    for (const it of replay.items) {
+      if (elapsed < it.start) break;
+      const part = Math.min(1, (elapsed - it.start) / it.dur);
+      if (part >= 1 || it.s.type === 'stamp' || it.s.shape) {
+        renderSingleStroke(it.s, false, it.partner);
+      } else {
+        const n = Math.max(1, Math.ceil(it.s.points.length * part));
+        renderSingleStroke({...it.s, points: it.s.points.slice(0, n)}, false, it.partner);
+      }
+    }
+    if (elapsed > replay.total + 600) setTimeout(stopReplay, 0);
+  }
+
+  // ─── Export the whole board (both layers) as a PNG ───
+  function contentBounds(list) {
+    let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+    const add = (x, y) => { minX = Math.min(minX, x); minY = Math.min(minY, y); maxX = Math.max(maxX, x); maxY = Math.max(maxY, y); };
+    for (const s of list) {
+      if (s.type === 'stamp') { add(s.x, s.y); add(s.x + s.w, s.y + s.h); continue; }
+      const paths = s.shape ? shapePaths(s) : [s.points || []];
+      for (const path of paths) for (const p of path) add(p.x, p.y);
+    }
+    return minX === Infinity ? null : {minX: minX - 30, minY: minY - 30, maxX: maxX + 30, maxY: maxY + 30};
+  }
+
+  function exportImage() {
+    const all = [...(showPartners ? partnerLayers.flatMap(l => l.strokes) : []), ...(showMine ? strokes : [])];
+    const b = contentBounds(all);
+    if (!b) return null;
+    const k = Math.min(2, 4000 / Math.max(b.maxX - b.minX, b.maxY - b.minY));
+    const out = document.createElement('canvas');
+    out.width = Math.ceil((b.maxX - b.minX) * k);
+    out.height = Math.ceil((b.maxY - b.minY) * k);
+    // Render with the normal pipeline by swapping in the export canvas and view
+    const saved = {canvas, ctx, panX, panY, scale, selectedStrokes, selectionBox};
+    canvas = out;
+    ctx = out.getContext('2d');
+    scale = k;
+    panX = -b.minX * k;
+    panY = -b.minY * k;
+    selectedStrokes = [];
+    selectionBox = null;
+    try {
+      redrawCanvas();
+      return out.toDataURL('image/png');
+    } finally {
+      ({canvas, ctx, panX, panY, scale, selectedStrokes, selectionBox} = saved);
+      redrawCanvas();
+    }
   }
 
   // Partner's pen position, so "look here" works over a video call
@@ -639,6 +1032,28 @@
   }
 
   function renderStampObject(stamp, isSelected) {
+    if (stamp.kind === 'text') {
+      ctx.save();
+      ctx.fillStyle = isSelected ? '#D67052' : (stamp.color || '#23304A');
+      ctx.font = TEXT_FONT;
+      (stamp.lines || []).forEach((line, i) => ctx.fillText(line, stamp.x + 4, stamp.y + 22 + i * 26));
+      ctx.restore();
+      return;
+    }
+    if (stamp.kind === 'image') {
+      const img = loadImage(stamp.src);
+      ctx.save();
+      if (img.complete && img.naturalWidth) ctx.drawImage(img, stamp.x, stamp.y, stamp.w, stamp.h);
+      else {
+        ctx.fillStyle = 'rgba(0,0,0,0.04)';
+        ctx.fillRect(stamp.x, stamp.y, stamp.w, stamp.h);
+      }
+      ctx.strokeStyle = isSelected ? '#D67052' : 'rgba(35, 48, 74, 0.18)';
+      ctx.lineWidth = isSelected ? 2 : 1;
+      ctx.strokeRect(stamp.x, stamp.y, stamp.w, stamp.h);
+      ctx.restore();
+      return;
+    }
     ctx.save();
     const isDark = document.documentElement.getAttribute('data-theme') === 'dark';
     ctx.fillStyle = isDark ? '#30302d' : '#ffffff';
@@ -683,13 +1098,7 @@
         continue;
       }
 
-      let hit = false;
-      for (const pt of (str.points || [])) {
-        if (Math.hypot(pt.x - x, pt.y - y) <= eraserRadius) {
-          hit = true;
-          break;
-        }
-      }
+      const hit = strokeHit(str, x, y, eraserRadius);
       if (hit) modified = true;
       else remaining.push(str);
     }
@@ -931,6 +1340,9 @@
     partnerLayers = [];
     liveStrokes = {};
     pointers = {};
+    if (replay) stopReplay();
+    for (const k of Object.keys(laserTrails)) delete laserTrails[k];
+    flashes = [];
     loadCardWhiteboard(cardId);
     hooks.onCardOpened?.(cardId);
   }
@@ -973,6 +1385,29 @@
     if (stroke) liveStrokes[memberId] = stroke;
     else delete liveStrokes[memberId];
     redrawCanvas();
+  }
+
+  function addRemoteLaser(cardId, memberId, point) {
+    if (cardId !== activeCardId || !point) return;
+    addLaserPoint(memberId, point.x, point.y);
+  }
+
+  // Partner asked me to look at a spot: centre the view there and pulse a ring
+  function lookAt(cardId, view) {
+    if (cardId !== activeCardId || !view) return;
+    setView(view);
+    flashAt(view.cx, view.cy);
+  }
+
+  // Where I'm looking now (centre of my view), for "请看这里"
+  function currentView() {
+    if (!canvas) return null;
+    return {cx: (canvas.width / 2 - panX) / scale, cy: (canvas.height / 2 - panY) / scale, scale};
+  }
+
+  function setPenOnly(on) {
+    penOnly = Boolean(on);
+    try { localStorage.setItem('eju_wb_pen_only', penOnly ? '1' : '0'); } catch (_) {}
   }
 
   function setPointer(cardId, memberId, point) {
@@ -1147,6 +1582,17 @@
     setLive,
     setPointer,
     setView,
-    setLayerVisibility
+    setLayerVisibility,
+    addRemoteLaser,
+    lookAt,
+    currentView,
+    flashAt,
+    addImage: addImageStamp,
+    setPenOnly,
+    penOnly: () => penOnly,
+    startReplay,
+    stopReplay,
+    isReplaying: () => Boolean(replay),
+    exportImage
   };
 })();

@@ -1,4 +1,4 @@
-// 学习小组同步：共同进度 + 白板各自一层、实时可见 + 跟随讲题
+// 学习小组同步：学习进度 + 白板各自一层、实时可见 + 讲课模式（讲课的一方带着对方翻题、展开步骤）
 // Talks to server/eju_sync_server.py under /api/v2. Works offline: local edits queue in an
 // outbox and upload when the connection is back.
 (function () {
@@ -12,6 +12,8 @@
     outbox: 'eju-group-outbox',
     snapshot: 'eju-group-snapshot',
     follow: 'eju-group-follow',
+    lessonFollow: 'eju-lesson-follow',
+    lesson: 'eju-lesson-state',
   };
   const PARTNER_LAYER_PREFIX = 'eju_wbp_';
   const DEVICE = Math.random().toString(36).slice(2, 10);
@@ -36,8 +38,15 @@
   let uploadFailing = false;
   const partnerPresence = {}; // memberId -> {cardId, at}
 
+  // Lesson mode: the teacher's tutor state is pushed to everyone; students follow unless paused
+  let lessonOn = false; // I am teaching right now
+  // Last lesson state received from someone else: {on, cardId, boardId, reveal, member, at}. Kept across reloads:
+  // the stream only replays events after my cursor, so a lesson started before a reload would be missed
+  let lesson = load(KEYS.lesson, null);
+  let lessonFollow = load(KEYS.lessonFollow, true);
+
   function normalizeSnapshot(s) {
-    return {progress: {}, bookmarks: {}, tasks: {}, history: {}, mocks: {}, strokes: {}, ...(s || {})};
+    return {progress: {}, bookmarks: {}, tasks: {}, history: {}, mocks: {}, strokes: {}, langhelp: {}, pages: {}, ...(s || {})};
   }
 
   function persist() {
@@ -57,6 +66,8 @@
   }
 
   const myId = () => me?.member?.id;
+  const isTeacher = () => me?.member?.role === 'teacher';
+  const ROLE_LABEL = {student: '学习', teacher: '讲课'};
   const memberName = id => me?.members?.find(m => m.id === id)?.name || '同伴';
   const newId = () => `${myId() || 'local'}-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 7)}`;
 
@@ -90,11 +101,11 @@
     const events = [];
     let tagged = false;
 
-    for (const [id, v] of Object.entries(state.progress || {})) {
-      const h = hashOf(v);
-      if (snapshot.progress[id] !== h) {
-        snapshot.progress[id] = h;
-        events.push({kind: 'progress', key: id, at: now, payload: v});
+    for (const [id, p] of Object.entries(state.boardPages || {})) {
+      const h = hashOf(p);
+      if (snapshot.pages[id] !== h) {
+        snapshot.pages[id] = h;
+        events.push({kind: 'page', key: id, at: now, payload: p});
       }
     }
     const bmKeys = new Set([...Object.keys(state.bookmarks || {}), ...Object.keys(snapshot.bookmarks)]);
@@ -103,6 +114,26 @@
       if (Boolean(snapshot.bookmarks[id]) !== on) {
         snapshot.bookmarks[id] = on;
         events.push({kind: 'bookmark', key: id, at: now, payload: {on}});
+      }
+    }
+    // The study record belongs to the student; the teacher's browser only shows it
+    if (isTeacher()) {
+      queue(events);
+      return;
+    }
+
+    for (const [id, v] of Object.entries(state.langHelp || {})) {
+      const h = hashOf(v);
+      if (snapshot.langhelp[id] !== h) {
+        snapshot.langhelp[id] = h;
+        events.push({kind: 'langhelp', key: id, at: now, payload: v});
+      }
+    }
+    for (const [id, v] of Object.entries(state.progress || {})) {
+      const h = hashOf(v);
+      if (snapshot.progress[id] !== h) {
+        snapshot.progress[id] = h;
+        events.push({kind: 'progress', key: id, at: now, payload: v});
       }
     }
     for (const [date, day] of Object.entries(state.tasks || {})) {
@@ -197,6 +228,8 @@
     const wb = window.EJU_WHITEBOARD;
     const touchedCards = new Set();
     const deferred = [];
+    let pagesChanged = false;
+    let lessonEvent = null;
 
     const apply = state => {
       for (const ev of events) {
@@ -215,6 +248,17 @@
         } else if (ev.kind === 'history') {
           if (!state.history.some(h => h.eid === ev.key)) state.history.push(p);
           snapshot.history[ev.key] = 1;
+        } else if (ev.kind === 'langhelp') {
+          state.langHelp = state.langHelp || {};
+          state.langHelp[ev.key] = p;
+          snapshot.langhelp[ev.key] = hashOf(p);
+        } else if (ev.kind === 'page') {
+          state.boardPages = state.boardPages || {};
+          state.boardPages[ev.key] = p;
+          snapshot.pages[ev.key] = hashOf(p);
+          pagesChanged = true;
+        } else if (ev.kind === 'lesson') {
+          if (ev.member !== myId()) lessonEvent = {...p, member: ev.member};
         } else if (ev.kind === 'mock') {
           state.mocks = state.mocks || [];
           if (!state.mocks.some(m => m.mid === ev.key)) state.mocks.push(p);
@@ -252,7 +296,104 @@
     cursor = Math.max(cursor, ...events.map(e => e.seq || 0));
     persist();
     touchedCards.forEach(pushPartnerLayers);
+    if (pagesChanged) window.EJU_APP.refreshBoardPages?.();
+    if (lessonEvent) onLessonState(lessonEvent);
     if (deferred.length) setTimeout(() => applyEvents(deferred), 400);
+  }
+
+  // ─── Lesson mode ───
+  const LESSON_STALE_MS = 3 * 3600 * 1000; // a lesson nobody ended is treated as over after 3 hours
+
+  function lessonPayload() {
+    const st = window.EJU_APP?.getTutorState();
+    if (!st) return null;
+    return {on: lessonOn, ...st, boardTitle: st.boardId ? window.EJU_APP.boardTitle(st.boardId) : null, at: Date.now()};
+  }
+
+  // Teacher side: push what is open now (live for speed, stored so a late joiner catches up)
+  const storeLesson = throttle(p => queue([{kind: 'lesson', key: 'state', at: Date.now(), payload: p}]), 1000);
+  function broadcastLesson(force) {
+    if (!token || (!lessonOn && !force)) return;
+    const p = lessonPayload() || {on: false, at: Date.now()};
+    if (!lessonOn) p.on = false;
+    sendLive({t: 'lesson', ...p});
+    storeLesson(p);
+  }
+
+  function setLessonOn(on) {
+    lessonOn = on;
+    if (on && window.EJU_APP?.currentRoute() !== 'math') {
+      const st = window.EJU_APP?.getTutorState();
+      if (!st) document.querySelector('[data-route="math"]')?.click();
+    }
+    broadcastLesson(true);
+    renderLessonBar();
+  }
+
+  // Student side
+  function onLessonState(p) {
+    if (!p || p.member === myId()) return;
+    if (p.on && Date.now() - (p.at || 0) > LESSON_STALE_MS) p = {...p, on: false};
+    const started = p.on && !lesson?.on;
+    lesson = p;
+    save(KEYS.lesson, p);
+    if (p.on && lessonFollow && !isTeacher()) window.EJU_APP?.applyTutorState(p);
+    if (started && !isTeacher()) notify(`${memberName(p.member)} 开始讲课了`);
+    renderLessonBar();
+  }
+
+  function following() {
+    return follow || Boolean(lesson?.on && lessonFollow && !isTeacher());
+  }
+
+  function renderLessonBar() {
+    const bar = $('#lessonBar');
+    if (!bar) return;
+    bar.hidden = !token;
+    if (!token) return;
+    const toggle = $('#lessonToggleBtn');
+    const followBtn = $('#lessonFollowBtn');
+    const text = $('#lessonText');
+    if (isTeacher()) {
+      const students = (me?.members || []).filter(m => m.role !== 'teacher' && m.id !== myId());
+      const fresh = Date.now() - 45000;
+      const online = students.filter(m => partnerPresence[m.id]?.at > fresh).map(m => m.name);
+      bar.classList.toggle('is-live', lessonOn);
+      text.textContent = lessonOn
+        ? `正在讲课：对方的讲题台跟着你翻题、展开步骤、换白板页${online.length ? `（${online.join('、')} 在线）` : '（对方暂时不在线，上线后会自动跟上）'}`
+        : `准备好了就点「开始讲课」${online.length ? `，${online.join('、')} 在线` : ''}`;
+      toggle.hidden = false;
+      toggle.textContent = lessonOn ? '结束讲课' : '开始讲课';
+      followBtn.hidden = true;
+    } else {
+      const live = Boolean(lesson?.on);
+      bar.classList.toggle('is-live', live);
+      bar.hidden = !live;
+      toggle.hidden = true;
+      followBtn.hidden = !live;
+      followBtn.textContent = lessonFollow ? '暂停跟随' : '继续跟随';
+      text.textContent = live
+        ? `${memberName(lesson.member)} 正在讲课${lessonFollow ? ' · 跟随中' : ' · 已暂停跟随，你可以自己翻'}`
+        : '';
+    }
+  }
+
+  // A small, non-blocking notice (also a system notification when the page is in the background)
+  function notify(text) {
+    let el = document.getElementById('syncToast');
+    if (!el) {
+      el = document.createElement('div');
+      el.id = 'syncToast';
+      el.className = 'sync-toast';
+      document.body.appendChild(el);
+    }
+    el.textContent = text;
+    el.classList.add('is-shown');
+    clearTimeout(notify.timer);
+    notify.timer = setTimeout(() => el.classList.remove('is-shown'), 4000);
+    try {
+      if (document.hidden && 'Notification' in window && Notification.permission === 'granted') new Notification('EJU 冲刺', {body: text});
+    } catch (_) {}
   }
 
   // Whiteboard notes made on this device before joining (or while offline) go up on connect
@@ -282,6 +423,7 @@
       let live = liveBuffers[msg.member];
       if (!live || live.id !== p.id) {
         live = liveBuffers[msg.member] = {id: p.id, mode: p.mode, color: p.color, width: p.width, alpha: p.alpha, points: []};
+        if (p.shape) live.shape = p.shape;
       }
       live.points.length = Math.min(live.points.length, p.from);
       live.points.push(...p.points);
@@ -292,12 +434,23 @@
       endTimers[msg.member] = setTimeout(() => wb?.setLive(p.cardId, msg.member, null), 1500);
     } else if (p.t === 'pointer') {
       wb?.setPointer(p.cardId, msg.member, p.x == null ? null : {x: p.x, y: p.y, name: memberName(msg.member)});
+    } else if (p.t === 'laser') {
+      for (const pt of p.points || []) wb?.addRemoteLaser(p.cardId, msg.member, pt);
+    } else if (p.t === 'lesson') {
+      onLessonState({...p, member: msg.member});
+    } else if (p.t === 'look') {
+      // "请看这里": go to the same question / page, then centre on the spot
+      if (msg.member === myId()) return;
+      if (p.tutor && window.EJU_APP) window.EJU_APP.applyTutorState({...p.tutor, reveal: null});
+      setTimeout(() => wb?.lookAt(wb.activeCardId(), p.view), 80);
+      notify(`${memberName(msg.member)}：请看这里`);
     } else if (p.t === 'card') {
-      if (follow && msg.member !== myId() && p.cardId && window.EJU_APP?.currentTutorCardId() !== p.cardId) {
+      if (following() && msg.member !== myId() && p.cardId && !lesson?.on
+          && !p.cardId.startsWith('page-') && window.EJU_APP?.currentTutorCardId() !== p.cardId) {
         window.EJU_APP.openTutorCard(p.cardId);
       }
     } else if (p.t === 'view') {
-      if (follow && msg.member !== myId() && wb?.activeCardId() === p.cardId) wb.setView(p);
+      if (following() && msg.member !== myId() && wb?.activeCardId() === p.cardId) wb.setView(p);
     }
   }
 
@@ -329,12 +482,20 @@
   let liveSent = {id: null, count: 0};
   const sendStrokeProgress = throttle((cardId, stroke) => {
     if (liveSent.id !== stroke.id) liveSent = {id: stroke.id, count: 0};
-    const from = liveSent.count;
+    // A shape keeps two points that move, so it is always resent whole
+    const from = stroke.shape ? 0 : liveSent.count;
     const points = stroke.points.slice(from);
     if (!points.length) return;
     liveSent.count = stroke.points.length;
-    sendLive({t: 'stroke', cardId, id: stroke.id, mode: stroke.mode, color: stroke.color, width: stroke.width, alpha: stroke.alpha, from, points});
-  }, 50);
+    sendLive({t: 'stroke', cardId, id: stroke.id, mode: stroke.mode, color: stroke.color, width: stroke.width, alpha: stroke.alpha, shape: stroke.shape, from, points});
+  }, 40);
+  // Laser points are batched: the partner draws the same fading trail
+  let laserBatch = [];
+  const sendLaser = throttle(cardId => {
+    if (!laserBatch.length) return;
+    sendLive({t: 'laser', cardId, points: laserBatch});
+    laserBatch = [];
+  }, 40);
   const sendPointer = throttle((cardId, pt) => sendLive({t: 'pointer', cardId, x: pt.x, y: pt.y}), 80);
   const sendView = throttle((cardId, v) => sendLive({t: 'view', cardId, ...v}), 150);
 
@@ -353,6 +514,11 @@
     };
     wb.hooks.onPointer = (cardId, pt) => token && sendPointer(cardId, pt);
     wb.hooks.onView = (cardId, v) => token && sendView(cardId, v);
+    wb.hooks.onLaser = (cardId, pt) => {
+      if (!token) return;
+      laserBatch.push({x: Math.round(pt.x * 10) / 10, y: Math.round(pt.y * 10) / 10});
+      sendLaser(cardId);
+    };
     wb.hooks.onCardOpened = cardId => {
       if (!token) return;
       pushPartnerLayers(cardId);
@@ -417,6 +583,13 @@
         pushPartnerLayers(cardId);
         sendLive({t: 'card', cardId});
       }
+      if (lessonOn) broadcastLesson();
+      // Rejoin a lesson that was going on before this page loaded
+      if (lesson?.on && !lesson.rejoined) {
+        lesson.rejoined = true;
+        onLessonState({...lesson});
+      }
+      renderLessonBar();
       setStatus();
     }
   }
@@ -424,9 +597,17 @@
   function updateMembers(members) {
     if (!me || !members) return;
     me.members = members;
+    const mine = members.find(m => m.id === myId());
+    if (mine?.role && me.member.role !== mine.role) {
+      me.member.role = mine.role;
+      if (mine.role === 'teacher') clearLocalStudy();
+      else lessonOn = false;
+      window.EJU_APP?.applyRemote(() => {});
+    }
     save(KEYS.me, me);
     renderGroupPane();
     renderPresence();
+    renderLessonBar();
   }
 
   // ─── Sign in / out ───
@@ -446,9 +627,21 @@
     setStatus();
   }
 
+  // The teacher's browser shows the student's record, so its own local study record is dropped
+  function clearLocalStudy() {
+    window.EJU_APP?.applyRemote(state => {
+      state.progress = {};
+      state.history = [];
+      state.mocks = [];
+      state.tasks = {};
+      state.langHelp = {};
+    });
+  }
+
   function adopt(result) {
     token = result.token;
     me = {member: result.member, group: result.group, members: result.members};
+    if (isTeacher()) clearLocalStudy();
     cursor = 0;
     outbox = [];
     snapshot = normalizeSnapshot(null); // first sync uploads this device's existing progress
@@ -463,7 +656,9 @@
     token = null;
     me = null;
     connected = false;
-    for (const k of [KEYS.token, KEYS.me, KEYS.cursor, KEYS.outbox, KEYS.snapshot]) drop(k);
+    for (const k of [KEYS.token, KEYS.me, KEYS.cursor, KEYS.outbox, KEYS.snapshot, KEYS.lesson]) drop(k);
+    lesson = null;
+    lessonOn = false;
     cursor = 0;
     outbox = [];
     snapshot = normalizeSnapshot(null);
@@ -509,9 +704,13 @@
     if (!token || !me) return;
     $('#groupNameText').textContent = me.group?.name || '';
     $('#groupMeText').textContent = me.member?.name || '';
+    $('#groupRoleText').textContent = `${ROLE_LABEL[me.member?.role] || '学习'}的一方`;
     $('#groupMembersList').innerHTML = (me.members || [])
-      .map(m => `<li>${escapeHtml(m.name)}${m.id === myId() ? '（我）' : ''}</li>`).join('');
+      .map(m => `<li>${escapeHtml(m.name)} · ${ROLE_LABEL[m.role] || '学习'}${m.id === myId() ? '（我）' : ''}</li>`).join('');
     $('#groupInviteLink').value = inviteLink();
+    const tLink = $('#groupTeacherInviteLink');
+    if (tLink) tLink.value = me.group?.teacherInviteCode
+      ? `${location.origin}${location.pathname}#join=${encodeURIComponent(me.group.teacherInviteCode)}` : '';
     $('#groupDeviceLink').value = deviceLink();
   }
 
@@ -535,6 +734,8 @@
   }
 
   function cardLabel(cardId) {
+    const page = window.EJU_APP?.boardTitle(cardId);
+    if (page) return page;
     const card = (window.EJU_BANK || []).find(c => c.id === cardId);
     return card ? card.topic : cardId;
   }
@@ -553,8 +754,9 @@
 
     $('#groupCreateBtn')?.addEventListener('click', async () => {
       try {
-        adopt(await api('/groups', {method: 'POST', body: {groupName: $('#groupNameInput').value, memberName: $('#groupMemberName').value}}));
-        setStatus('小组已创建。把「邀请对方加入」的链接发给她。');
+        adopt(await api('/groups', {method: 'POST', body: {groupName: $('#groupNameInput').value, memberName: $('#groupMemberName').value,
+          role: $('#groupRoleSelect')?.value || 'student'}}));
+        setStatus(isTeacher() ? '小组已创建。把「邀请学习的一方」链接发给对方。' : '小组已创建。把「邀请讲课的一方」链接发给对方。');
       } catch (err) {
         setStatus(`创建失败：${err.message}`);
       }
@@ -579,6 +781,44 @@
       }
     };
     $('#groupCopyInviteBtn')?.addEventListener('click', () => copy($('#groupInviteLink'), '邀请链接'));
+    $('#groupCopyTeacherInviteBtn')?.addEventListener('click', () => copy($('#groupTeacherInviteLink'), '讲课邀请链接'));
+    $('#groupSwitchRoleBtn')?.addEventListener('click', async () => {
+      const next = isTeacher() ? 'student' : 'teacher';
+      const warn = next === 'teacher'
+        ? '切换成「讲课的一方」？这台设备上的刷题记录会改为显示对方的进度。'
+        : '切换成「学习的一方」？之后你的刷题会记入学习进度。';
+      if (!confirm(warn)) return;
+      try {
+        const res = await api('/role', {method: 'POST', body: {role: next}});
+        me = {...me, ...res};
+        save(KEYS.me, me);
+        if (next === 'teacher') clearLocalStudy();
+        else lessonOn = false;
+        renderGroupPane();
+        renderLessonBar();
+        setStatus(`已切换为${ROLE_LABEL[next]}的一方。`);
+      } catch (err) {
+        setStatus(`切换失败：${err.message}`);
+      }
+    });
+    $('#lessonToggleBtn')?.addEventListener('click', () => {
+      if (!lessonOn && 'Notification' in window && Notification.permission === 'default') Notification.requestPermission().catch(() => {});
+      setLessonOn(!lessonOn);
+    });
+    $('#lessonFollowBtn')?.addEventListener('click', () => {
+      lessonFollow = !lessonFollow;
+      save(KEYS.lessonFollow, lessonFollow);
+      if (lessonFollow && lesson?.on) window.EJU_APP?.applyTutorState(lesson);
+      renderLessonBar();
+    });
+    $('#wbLookHereBtn')?.addEventListener('click', () => {
+      const wb = window.EJU_WHITEBOARD;
+      const view = wb?.currentView();
+      if (!view) return;
+      sendLive({t: 'look', tutor: window.EJU_APP?.getTutorState(), view});
+      wb.flashAt(view.cx, view.cy);
+    });
+    window.addEventListener('eju-tutor-changed', () => broadcastLesson());
     $('#groupCopyDeviceBtn')?.addEventListener('click', () => copy($('#groupDeviceLink'), '设备链接'));
     $('#groupLeaveBtn')?.addEventListener('click', () => {
       if (confirm('在这台设备上退出小组？本机已有的进度会保留，之后不再同步。')) signedOut();
@@ -604,7 +844,9 @@
       if (!token || document.hidden) return;
       const cardId = window.EJU_WHITEBOARD?.activeCardId();
       if (window.EJU_APP?.currentRoute() === 'math' && cardId) sendLive({t: 'card', cardId});
+      if (lessonOn) broadcastLesson();
       renderPresence();
+      renderLessonBar();
     }, 20000);
   }
 
@@ -629,12 +871,18 @@
     }
   }
 
-  window.EJU_SYNC = {myName: () => me?.member?.name || null};
+  window.EJU_SYNC = {myName: () => me?.member?.name || null, isTeacher, role: () => me?.member?.role || null};
 
   function init() {
     bindUi();
     handleHash();
     start();
+    // An invite link opened in a tab that already shows the site only changes the hash
+    window.addEventListener('hashchange', () => {
+      const hadToken = token;
+      handleHash();
+      if (token && token !== hadToken) start();
+    });
   }
 
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', init);

@@ -3713,3 +3713,30 @@ h1, h2, h3, h4,
 }
 .cn-reveal-btn:hover { color: var(--primary); border-color: currentColor; }
 .cn-reveal-btn[hidden] { display: none; }
+
+.wb-check { display: inline-flex; align-items: center; gap: 4px; font-size: 13px; color: var(--text-muted); white-space: nowrap; cursor: pointer; }
+.wb-btn.is-replaying { background: var(--primary); color: #fff; border-color: var(--primary); }
+
+/* 讲题：解析一步一步展开 */
+.ms-step + .ms-step { margin-top: 10px; padding-top: 10px; border-top: 1px dashed var(--border); }
+.ms-step[hidden] { display: none; }
+#tutorNextStepBtn:disabled { opacity: .55; cursor: default; }
+
+/* 讲课模式提示条 */
+.lesson-bar { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin: 0 0 12px; padding: 10px 14px; border-radius: var(--radius); background: var(--surface-subtle); border: 1px solid var(--border); }
+.lesson-bar.is-live { background: var(--primary-soft); border-color: var(--primary); }
+.lesson-dot { width: 9px; height: 9px; border-radius: 50%; background: var(--text-muted); flex: none; }
+.lesson-bar.is-live .lesson-dot { background: var(--primary); animation: lessonPulse 1.4s ease-in-out infinite; }
+.lesson-text { flex: 1; min-width: 160px; font-size: 14px; }
+@keyframes lessonPulse { 50% { opacity: .35; } }
+
+.sync-toast { position: fixed; left: 50%; bottom: 24px; transform: translate(-50%, 20px); opacity: 0; pointer-events: none; z-index: 400;
+  background: var(--navy); color: #fff; padding: 10px 18px; border-radius: 999px; font-size: 14px; transition: opacity .25s, transform .25s; max-width: calc(100vw - 32px); }
+.sync-toast.is-shown { opacity: 1; transform: translate(-50%, 0); }
+
+.lang-help-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+.lang-help-list { list-style: none; margin: 8px 0 0; padding: 0; }
+.lang-help-list li { display: flex; justify-content: space-between; gap: 12px; padding: 8px 0; border-top: 1px solid var(--hairline); cursor: pointer; }
+.lang-help-list li:hover .lang-help-q { color: var(--primary); }
+.lang-help-q { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.lang-help-meta { flex: none; color: var(--text-muted); font-size: 13px; }

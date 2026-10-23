@@ -1,8 +1,9 @@
 #!/usr/bin/env python3
 """EJU 冲刺工作台 · 学习小组同步服务（Python 标准库 + SQLite，无第三方依赖）
 
-A small group (e.g. two people studying together) shares one study progress and
-sees each other's whiteboard layers live.
+A small group shares one study progress and sees each other's whiteboard layers live.
+Members are students (they study; progress belongs to them) or teachers (they explain and
+see the students' progress, but never write progress of their own).
 
 Data model: an event log per group. Every change the browser makes is an event
 {kind, key, at, payload}:
@@ -14,9 +15,10 @@ connection (Server-Sent Events) that pushes new events plus ephemeral "live"
 messages (in-progress pen strokes, pointer position, which question is open).
 
 Endpoints (JSON; auth with `Authorization: Bearer <member token>`):
-  POST /api/v2/groups   {groupName, memberName}        -> create group, first member
-  POST /api/v2/join     {inviteCode, memberName}       -> join an existing group
-  GET  /api/v2/me                                      -> me, group, members, invite code
+  POST /api/v2/groups   {groupName, memberName, role?} -> create group, first member (role: student|teacher)
+  POST /api/v2/join     {inviteCode, memberName}       -> join; the student or teacher invite code sets the role
+  GET  /api/v2/me                                      -> me, group, members, invite codes
+  POST /api/v2/role     {role}                         -> change my own role (someone who joined with the wrong link)
   GET  /api/v2/events?since=SEQ                        -> events after SEQ
   POST /api/v2/events   {events: [...]}                -> store + broadcast
   POST /api/v2/live     {payload}                      -> broadcast only, not stored
@@ -55,9 +57,12 @@ MAX_EVENTS_PER_POST = 500
 HEARTBEAT_SECONDS = 15
 PING_STREAM = threading.BoundedSemaphore(10)  # check.html connection tests; no auth, so keep them few
 
-REPLACEABLE_KINDS = {'progress', 'bookmark', 'task', 'stroke'}
+REPLACEABLE_KINDS = {'progress', 'bookmark', 'task', 'stroke', 'langhelp', 'lesson', 'page'}
 APPEND_KINDS = {'history', 'mock'}
 KINDS = REPLACEABLE_KINDS | APPEND_KINDS
+# A student's own study record; a teacher's browser must never overwrite it
+STUDENT_ONLY_KINDS = {'progress', 'task', 'history', 'mock', 'langhelp'}
+ROLES = ('student', 'teacher')
 
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS groups (
@@ -85,6 +90,12 @@ CREATE TABLE IF NOT EXISTS events (
 );
 CREATE INDEX IF NOT EXISTS events_group_seq ON events (group_id, seq);
 """
+
+# Columns added after the first release; applied to existing databases on start
+MIGRATIONS = [
+    ('members', 'role', "ALTER TABLE members ADD COLUMN role TEXT NOT NULL DEFAULT 'student'"),
+    ('groups', 'teacher_invite', 'ALTER TABLE groups ADD COLUMN teacher_invite TEXT'),
+]
 
 
 class ApiError(Exception):
@@ -117,43 +128,59 @@ class Store:
         self.db.row_factory = sqlite3.Row
         self.db.execute('PRAGMA journal_mode=WAL')
         self.db.executescript(SCHEMA)
+        self.migrate()
         self.lock = threading.Lock()
 
-    def create_group(self, group_name, member_name):
+    def migrate(self):
+        with self.db:
+            for table, column, sql in MIGRATIONS:
+                cols = [r['name'] for r in self.db.execute(f'PRAGMA table_info({table})')]
+                if column not in cols:
+                    self.db.execute(sql)
+            for row in self.db.execute('SELECT id FROM groups WHERE teacher_invite IS NULL').fetchall():
+                self.db.execute('UPDATE groups SET teacher_invite = ? WHERE id = ?', (secrets.token_urlsafe(9), row['id']))
+
+    def create_group(self, group_name, member_name, role='student'):
         group_id = 'g_' + secrets.token_urlsafe(9)
         member_id = 'm_' + secrets.token_urlsafe(9)
-        invite = secrets.token_urlsafe(9)
         token = secrets.token_urlsafe(32)
         with self.lock, self.db:
-            self.db.execute('INSERT INTO groups VALUES (?, ?, ?, ?)', (group_id, group_name, invite, now_ms()))
-            self.db.execute('INSERT INTO members VALUES (?, ?, ?, ?, ?)',
-                            (member_id, group_id, member_name, hash_token(token), now_ms()))
+            self.db.execute('INSERT INTO groups (id, name, invite_code, created_at, teacher_invite) VALUES (?, ?, ?, ?, ?)',
+                            (group_id, group_name, secrets.token_urlsafe(9), now_ms(), secrets.token_urlsafe(9)))
+            self.db.execute('INSERT INTO members (id, group_id, name, token_hash, created_at, role) VALUES (?, ?, ?, ?, ?, ?)',
+                            (member_id, group_id, member_name, hash_token(token), now_ms(), role))
         return token
 
     def join_group(self, invite_code, member_name):
         token = secrets.token_urlsafe(32)
         with self.lock, self.db:
-            group = self.db.execute('SELECT id FROM groups WHERE invite_code = ?', (invite_code,)).fetchone()
+            group = self.db.execute('SELECT id, invite_code FROM groups WHERE invite_code = ? OR teacher_invite = ?',
+                                    (invite_code, invite_code)).fetchone()
             if not group:
                 raise ApiError(HTTPStatus.NOT_FOUND, '邀请码不存在')
             count = self.db.execute('SELECT COUNT(*) FROM members WHERE group_id = ?', (group['id'],)).fetchone()[0]
             if count >= MAX_MEMBERS:
                 raise ApiError(HTTPStatus.CONFLICT, f'小组已满（最多 {MAX_MEMBERS} 人）')
-            self.db.execute('INSERT INTO members VALUES (?, ?, ?, ?, ?)',
-                            ('m_' + secrets.token_urlsafe(9), group['id'], member_name, hash_token(token), now_ms()))
+            role = 'student' if group['invite_code'] == invite_code else 'teacher'
+            self.db.execute('INSERT INTO members (id, group_id, name, token_hash, created_at, role) VALUES (?, ?, ?, ?, ?, ?)',
+                            ('m_' + secrets.token_urlsafe(9), group['id'], member_name, hash_token(token), now_ms(), role))
         return token
 
     def member_for_token(self, token):
         with self.lock:
             row = self.db.execute(
-                'SELECT m.id, m.name, m.group_id, g.name AS group_name, g.invite_code '
+                'SELECT m.id, m.name, m.role, m.group_id, g.name AS group_name, g.invite_code, g.teacher_invite '
                 'FROM members m JOIN groups g ON g.id = m.group_id WHERE m.token_hash = ?',
                 (hash_token(token),)).fetchone()
         return dict(row) if row else None
 
+    def set_role(self, member_id, role):
+        with self.lock, self.db:
+            self.db.execute('UPDATE members SET role = ? WHERE id = ?', (role, member_id))
+
     def members(self, group_id):
         with self.lock:
-            rows = self.db.execute('SELECT id, name FROM members WHERE group_id = ? ORDER BY created_at',
+            rows = self.db.execute('SELECT id, name, role FROM members WHERE group_id = ? ORDER BY created_at',
                                    (group_id,)).fetchall()
         return [dict(r) for r in rows]
 
@@ -208,6 +235,8 @@ def validate_event(ev, member):
     # Whiteboard layers are personal: only the author may write strokes under their member id
     if kind == 'stroke' and key.split('|')[1:2] != [member['id']]:
         raise ApiError(HTTPStatus.FORBIDDEN, 'can only write your own whiteboard layer')
+    if kind in STUDENT_ONLY_KINDS and member['role'] == 'teacher':
+        raise ApiError(HTTPStatus.FORBIDDEN, '讲课的一方不能修改学习进度')
     return {'kind': kind, 'key': key, 'at': at, 'payload': ev.get('payload')}
 
 
@@ -280,8 +309,9 @@ class Handler(BaseHTTPRequestHandler):
         return member
 
     def me_payload(self, member):
-        return {'member': {'id': member['id'], 'name': member['name']},
-                'group': {'id': member['group_id'], 'name': member['group_name'], 'inviteCode': member['invite_code']},
+        return {'member': {'id': member['id'], 'name': member['name'], 'role': member['role']},
+                'group': {'id': member['group_id'], 'name': member['group_name'], 'inviteCode': member['invite_code'],
+                          'teacherInviteCode': member['teacher_invite']},
                 'members': STORE.members(member['group_id'])}
 
     # ─── routing ───
@@ -305,8 +335,11 @@ class Handler(BaseHTTPRequestHandler):
                 return self.ping_stream()
             if route == ('POST', '/groups'):
                 body = self.read_json()
+                role = body.get('role') or 'student'
+                if role not in ROLES:
+                    raise ApiError(HTTPStatus.BAD_REQUEST, 'role must be student or teacher')
                 token = STORE.create_group(clean_name(body.get('groupName'), '小组名'),
-                                           clean_name(body.get('memberName'), '昵称'))
+                                           clean_name(body.get('memberName'), '昵称'), role)
                 return self.send_json(HTTPStatus.OK, {'token': token, **self.me_payload(STORE.member_for_token(token))})
             if route == ('POST', '/join'):
                 body = self.read_json()
@@ -318,6 +351,13 @@ class Handler(BaseHTTPRequestHandler):
             member = self.auth()
             if route == ('GET', '/me'):
                 return self.send_json(HTTPStatus.OK, self.me_payload(member))
+            if route == ('POST', '/role'):
+                role = self.read_json().get('role')
+                if role not in ROLES:
+                    raise ApiError(HTTPStatus.BAD_REQUEST, 'role must be student or teacher')
+                STORE.set_role(member['id'], role)
+                HUB.publish(member['group_id'], {'type': 'members', 'members': STORE.members(member['group_id'])})
+                return self.send_json(HTTPStatus.OK, self.me_payload({**member, 'role': role}))
             if route == ('GET', '/events'):
                 since = int(parse_qs(url.query).get('since', ['0'])[0] or 0)
                 events = STORE.events_since(member['group_id'], since)
