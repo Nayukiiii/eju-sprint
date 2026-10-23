@@ -13,6 +13,10 @@
 步骤：
   1. 每页先取 PDF 自带的文字；没有文字层（扫描件）就渲染成图片，用 Tesseract 日文 OCR。
   2. 每个 PDF 输出 <out>/<文件名>/text.txt（带页码标记）、pNN.png（原页图，校对用）。
+  2b. 扫描件（几乎所有 2018 年之后的 PDF）：Tesseract 读选项编号和正解表格会出错，请用 --vision：
+     set VISION_API_KEY=你的密钥   （默认智谱 glm-4v-flash，免费；也可换通义千问：
+     set VISION_BASE=https://dashscope.aliyuncs.com/compatible-mode/v1 和 set VISION_MODEL=qwen-vl-max）
+     python tools/ocr_bunso.py "…\【1】文综真题" --answers "…\【2】文综答案" --match 2023 --out ocr_out --vision
   3. 加 --llm 时，把文字交给 DeepSeek（只传文字，很便宜），得到 draft.json 和 report.md。
      DeepSeek 的密钥放在环境变量 DEEPSEEK_API_KEY；地址/模型可用 DEEPSEEK_BASE、DEEPSEEK_MODEL 改。
   4. 草稿一律是「待核对」：图表题会标 hasFigure，没有答案的会标 a=null。
@@ -46,7 +50,7 @@ def ocr_image(png_path, lang):
         return None
 
 
-def extract_pdf(pdf, out_dir, lang, dpi):
+def extract_pdf(pdf, out_dir, lang, dpi, ocr=True):
     out_dir.mkdir(parents=True, exist_ok=True)
     doc = fitz.open(pdf)
     chunks, scanned = [], 0
@@ -56,7 +60,7 @@ def extract_pdf(pdf, out_dir, lang, dpi):
         text = page.get_text().strip()
         if len(text) < MIN_TEXT:
             scanned += 1
-            text = (ocr_image(png, lang) or '').strip()
+            text = (ocr_image(png, lang) or '').strip() if ocr else ''
             tag = 'ocr' if text else 'empty'
         else:
             tag = 'text'
@@ -107,6 +111,74 @@ def llm_structure(text):
         else:
             print('   一段文字没解析出 JSON，已跳过', file=sys.stderr)
     return items
+
+
+# ─── 视觉模型模式（--vision）：扫描件的选项编号 ①②③④、箭头、正解表格子 Tesseract 读不准，改让会看图的模型读 ───
+VIS_Q_PROMPT = """这是 EJU 総合科目真题的一页（扫描件）。只输出 JSON 对象，不要解释：
+{"passage": "本页出现的阅读材料/题组前言的原文（没有就空字符串）",
+ "questions": [{"no": 方框里的解答番号（整数，没有就 null）, "q": "题干原文", "choices": ["选项1原文","选项2原文",...（不含①②编号）],
+                "hasFigure": 题目依赖图/表/地图/年表等，仅凭文字无法作答时为 true, "note": "看不清或可疑处的说明，没有就空"}]}
+规则：逐字抄写，不要翻译、不要补充、不要猜；看不清的地方在 note 里写明；如果这页只有材料没有题，questions 为空数组。"""
+
+VIS_A_PROMPT = """这是 EJU 正解表（The Correct Answers）的一页。只提取标题为「総合科目 / Japan and the World」的那张表。
+只输出 JSON 对象，不要解释：{"answers": {"题号": 正确选项编号(1-4整数), ...}, "note": "看不清的题号或其他提醒"}
+题号用表里的解答番号。看不清的不要写，绝对不要猜。如果这一页没有総合科目的表，answers 为空对象。"""
+
+
+def vision_call(png_path, prompt):
+    import base64
+    import io
+    import requests
+    from PIL import Image
+    key = os.environ.get('VISION_API_KEY')
+    if not key:
+        sys.exit('请先设置环境变量 VISION_API_KEY（可选 VISION_BASE / VISION_MODEL，见文件开头说明）')
+    base = os.environ.get('VISION_BASE', 'https://open.bigmodel.cn/api/paas/v4').rstrip('/')
+    model = os.environ.get('VISION_MODEL', 'glm-4v-flash')
+    im = Image.open(png_path).convert('RGB')
+    im.thumbnail((1600, 1600))
+    buf = io.BytesIO()
+    im.save(buf, 'JPEG', quality=85)
+    b64 = base64.b64encode(buf.getvalue()).decode()
+    r = requests.post(f'{base}/chat/completions', timeout=240, headers={'Authorization': f'Bearer {key}'},
+                      json={'model': model, 'temperature': 0, 'messages': [{'role': 'user', 'content': [
+                          {'type': 'text', 'text': prompt},
+                          {'type': 'image_url', 'image_url': {'url': f'data:image/jpeg;base64,{b64}'}}]}]})
+    r.raise_for_status()
+    m = re.search(r'\{.*\}', r.json()['choices'][0]['message']['content'], re.S)
+    return json.loads(m.group(0)) if m else {}
+
+
+def vision_questions(pdf_dir):
+    items, passage = [], ''
+    for png in sorted(pdf_dir.glob('p*.png')):
+        n = int(png.stem[1:])
+        try:
+            res = vision_call(png, VIS_Q_PROMPT)
+        except Exception as e:
+            print(f'   第{n}页视觉读取失败：{e}', file=sys.stderr)
+            continue
+        if res.get('passage'):
+            passage = res['passage']
+        for q in res.get('questions') or []:
+            q['page'] = n
+            q['context'] = passage
+            items.append(q)
+    return items
+
+
+def vision_answers(pdf_dir):
+    ans, notes = {}, []
+    for png in sorted(pdf_dir.glob('p*.png')):
+        try:
+            res = vision_call(png, VIS_A_PROMPT)
+        except Exception as e:
+            print(f'   答案页 {png.name} 读取失败：{e}', file=sys.stderr)
+            continue
+        ans.update(res.get('answers') or {})
+        if res.get('note'):
+            notes.append(f'{png.name}: {res["note"]}')
+    return ans, notes
 
 
 def pair_key(name):
@@ -160,7 +232,8 @@ def main():
     ap.add_argument('--out', default='ocr_out')
     ap.add_argument('--lang', default='jpn')
     ap.add_argument('--dpi', type=int, default=200)
-    ap.add_argument('--llm', action='store_true')
+    ap.add_argument('--llm', action='store_true', help='OCR 文字交给 DeepSeek 拆题（适合有文字层的 PDF）')
+    ap.add_argument('--vision', action='store_true', help='扫描件推荐：逐页图片交给视觉模型读题和正解表（需 VISION_API_KEY）')
     args = ap.parse_args()
 
     pdfs = sorted(p for p in Path(args.folder).rglob('*.pdf') if args.match in p.name)
@@ -173,21 +246,22 @@ def main():
     for pdf in pdfs:
         out_dir = Path(args.out) / pdf.stem
         print(f'→ {pdf.name}')
-        n, scanned = extract_pdf(pdf, out_dir, args.lang, args.dpi)
-        print(f'   {n} 页，其中 {scanned} 页走了 OCR')
-        if args.llm:
-            items = llm_structure((out_dir / 'text.txt').read_text(encoding='utf-8'))
+        n, scanned = extract_pdf(pdf, out_dir, args.lang, args.dpi, ocr=not args.vision)
+        print(f'   {n} 页，其中 {scanned} 页没有文字层' + ('（--vision 模式不做 OCR）' if args.vision else '，已走 OCR'))
+        if args.llm or args.vision:
+            items = vision_questions(out_dir) if args.vision else llm_structure((out_dir / 'text.txt').read_text(encoding='utf-8'))
             ans = {}
             ap_ = ans_pdfs.get(pair_key(pdf.name))
             if args.answers and not ap_:
                 print('   没找到配对的答案 PDF')
             if ap_:
                 a_dir = Path(args.out) / (pdf.stem + '_答案')
-                extract_pdf(ap_, a_dir, args.lang, args.dpi)
-                ans = llm_answers((a_dir / 'text.txt').read_text(encoding='utf-8'))
+                extract_pdf(ap_, a_dir, args.lang, args.dpi, ocr=not args.vision)
+                ans = vision_answers(a_dir)[0] if args.vision else llm_answers((a_dir / 'text.txt').read_text(encoding='utf-8'))
                 (out_dir / 'answers.json').write_text(json.dumps(ans, ensure_ascii=False, indent=2), encoding='utf-8')
                 print(f'   答案表读出 {len(ans)} 个，来自 {ap_.name}')
             for it in items:
+                it.setdefault('a', None)
                 official = ans.get(str(it.get('no')))
                 if official is not None:
                     it['aFromQuestion'] = it.get('a')
