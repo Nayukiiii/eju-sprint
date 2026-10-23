@@ -24,7 +24,9 @@
   // Stratified random pick: each deck contributes in proportion to its size in the bank
   function pick(n, scope) {
     const prog = app().getState().progress || {};
-    let all = pool();
+    let deleted = {};
+    try { deleted = Object.fromEntries(Object.entries(JSON.parse(localStorage.getItem('eju-ai-decisions-v1') || '{}')).filter(([, d]) => d.action === 'delete')); } catch (_) {}
+    let all = pool().filter(c => !deleted[c.id]);
     if (scope === 'new') all = all.slice().sort((a, b) => (prog[a.id] ? 1 : 0) - (prog[b.id] ? 1 : 0) || Math.random() - 0.5);
     else all = all.slice().sort(() => Math.random() - 0.5);
     const decks = {};

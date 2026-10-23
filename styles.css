@@ -3869,3 +3869,6 @@ h1, h2, h3, h4,
 .mockb-choice.is-picked { border-color: #d67052; background: #fbeee8; }
 .mockb-choice.is-picked b { background: #d67052; color: #fff; }
 .mock-opts { display: flex; flex-wrap: wrap; gap: 10px 16px; }
+.mock-group { margin-bottom: 14px; }
+.mock-group-head { display: flex; justify-content: space-between; align-items: center; gap: 10px; margin-bottom: 4px; }
+.mock-spark { flex: none; }

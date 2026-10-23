@@ -1446,16 +1446,36 @@
   function renderMocksList() {
     const box = $('#mockList');
     if (!box) return;
+    const all = state.mocks || [];
+    const kindOf = m => (m.kind === 'bunso' ? 'bunso' : (m.real ? 'math' : 'manual'));
+    const pct = m => (m.total ? Math.round((m.correct / m.total) * 100) : Math.round((m.score / 200) * 100));
+    const groups = [
+      ['math', '数学真题模考', m => `正确 ${m.correct}/${m.total} 空（${pct(m)}%）`],
+      ['bunso', '文综仿真卷（非真题）', m => `正确 ${m.correct}/${m.total} 题（${m.score}%）`],
+      ['manual', '手动记录的成绩', m => `${m.subject} · ${m.score} 分`]
+    ];
     box.innerHTML = '';
-    for (const m of (state.mocks || []).slice().reverse().slice(0, 8)) {
-      const row = document.createElement('div');
-      row.className = 'mock-row';
-      row.innerHTML = m.kind === 'bunso'
-        ? `<span><b>文综仿真卷</b> · 正确 ${m.correct}/${m.total} 题（${m.score}%）</span><span class="stat-hint">${m.note || ''} (${m.date})</span>`
-        : m.real
-        ? `<span><b>${m.subject}</b> · 正确 ${m.correct}/${m.total} 空</span><span class="stat-hint">${m.note || ''} (${m.date})</span>`
-        : `<span><b>${m.subject}</b> · ${m.score} 分</span><span class="stat-hint">${m.note || ''} (${m.date})</span>`;
-      box.appendChild(row);
+    for (const [kind, title, fmt] of groups) {
+      const list = all.filter(m => kindOf(m) === kind);
+      if (!list.length && kind === 'manual') continue;
+      const sec = document.createElement('div');
+      sec.className = 'mock-group';
+      const pts = list.slice(-12).map(pct);
+      let spark = '';
+      if (pts.length >= 2) {
+        const W = 160, H = 36;
+        const xy = pts.map((v, i) => `${Math.round((i / (pts.length - 1)) * (W - 8)) + 4},${Math.round(H - 4 - (v / 100) * (H - 8))}`);
+        spark = `<svg class="mock-spark" viewBox="0 0 ${W} ${H}" width="${W}" height="${H}" aria-label="正确率趋势"><polyline fill="none" stroke="#d67052" stroke-width="2" points="${xy.join(' ')}"/>${xy.map(p => `<circle cx="${p.split(',')[0]}" cy="${p.split(',')[1]}" r="2.5" fill="#d67052"/>`).join('')}</svg>`;
+      }
+      sec.innerHTML = `<div class="mock-group-head"><b>${title}</b>${spark}</div>`;
+      for (const m of list.slice().reverse().slice(0, 6)) {
+        const row = document.createElement('div');
+        row.className = 'mock-row';
+        row.innerHTML = `<span>${fmt(m)}</span><span class="stat-hint">${m.note || ''} (${m.date})</span>`;
+        sec.appendChild(row);
+      }
+      if (!list.length) sec.insertAdjacentHTML('beforeend', '<p class="stat-hint">还没有记录。</p>');
+      box.appendChild(sec);
     }
   }
 
