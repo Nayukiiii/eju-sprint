@@ -1,0 +1,154 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>连接测试</title>
+  <link rel="icon" href="./icon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="./vendor/katex/katex.min.css">
+  <script src="./vendor/katex/katex.min.js"></script>
+  <style>
+    :root { --bg: #F3F0E9; --card: #FBF9F4; --text: #2B2A27; --muted: #77736A; --ok: #4E7A4A; --bad: #C0503A; --warn: #B8862B; --line: #E2DCCF; }
+    @media (prefers-color-scheme: dark) { :root { --bg: #1F1E1B; --card: #282724; --text: #ECE8DF; --muted: #A39E93; --line: #3A3833; } }
+    body { margin: 0; background: var(--bg); color: var(--text); font: 16px/1.7 -apple-system, "PingFang SC", "Microsoft YaHei", sans-serif; }
+    main { max-width: 560px; margin: 0 auto; padding: 24px 16px 48px; }
+    h1 { font: 600 24px/1.3 "Songti SC", "SimSun", Georgia, serif; margin: 0 0 4px; }
+    p.sub { color: var(--muted); margin: 0 0 20px; font-size: 14px; }
+    ol { list-style: none; padding: 0; margin: 0; }
+    li { background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 12px 14px; margin-bottom: 10px; display: grid; grid-template-columns: 28px 1fr; gap: 4px 10px; }
+    .mark { font-size: 20px; line-height: 1.3; grid-row: span 2; }
+    .name { font-weight: 600; }
+    .detail { color: var(--muted); font-size: 14px; grid-column: 2; word-break: break-all; }
+    .ok { color: var(--ok); } .bad { color: var(--bad); } .warn { color: var(--warn); }
+    #verdict { margin: 18px 0 12px; font-weight: 600; font-size: 18px; }
+    button { font: inherit; padding: 8px 16px; border-radius: 999px; border: 1px solid var(--line); background: var(--card); color: var(--text); cursor: pointer; }
+    a { color: #D67052; }
+  </style>
+</head>
+<body>
+<main>
+  <h1>连接测试</h1>
+  <p class="sub">打开后会自动测试，大约 1 分钟。测完把结果截图或复制给对方。</p>
+  <ol id="list"></ol>
+  <div id="verdict">测试中…</div>
+  <button id="copyBtn" type="button">复制结果</button>
+  <p class="sub" style="margin-top:16px"><a href="./">返回网站</a></p>
+</main>
+<script>
+(() => {
+  const items = {};
+  const list = document.getElementById('list');
+  function row(id, name) {
+    const li = document.createElement('li');
+    li.innerHTML = `<span class="mark">…</span><span class="name">${name}</span><span class="detail">测试中</span>`;
+    list.appendChild(li);
+    items[id] = {li, name, state: 'wait', detail: ''};
+  }
+  function set(id, state, detail) {
+    const it = items[id];
+    it.state = state;
+    it.detail = detail;
+    it.li.querySelector('.mark').textContent = {ok: '✓', bad: '✗', warn: '!'}[state];
+    it.li.querySelector('.mark').className = 'mark ' + state;
+    it.li.querySelector('.detail').textContent = detail;
+  }
+  const ms = t => `${Math.round(t)} ms`;
+
+  row('page', '网页能打开');
+  row('math', '数学公式能显示');
+  row('assets', '题库加载速度');
+  row('ping', '到服务器的延迟');
+  row('stream', '实时连接（白板同步用）');
+
+  set('page', 'ok', `${location.host} · ${navigator.userAgent.includes('Mobile') ? '手机' : '电脑'}`);
+
+  async function testMath() {
+    try {
+      const box = document.createElement('div');
+      katex.render('x = -\\dfrac{b}{2a},\\ \\sqrt{3}', box, {throwOnError: true});
+      document.body.appendChild(box);
+      box.style.cssText = 'position:absolute;left:-9999px';
+      await document.fonts.ready;
+      const font = document.fonts.check('16px KaTeX_Main');
+      set('math', font ? 'ok' : 'warn', font ? '公式和字体都正常' : '公式能排版，但公式字体没加载出来（显示会稍微难看）');
+    } catch (e) {
+      set('math', 'bad', '公式库没加载出来：' + e.message);
+    }
+  }
+
+  async function testAssets() {
+    const t0 = performance.now();
+    try {
+      const res = await fetch('./bank.js', {cache: 'no-store'});
+      const kb = (await res.arrayBuffer()).byteLength / 1024;
+      const t = performance.now() - t0;
+      set('assets', t < 1500 ? 'ok' : t < 5000 ? 'warn' : 'bad', `${Math.round(kb)} KB 用了 ${ms(t)}`);
+    } catch (e) {
+      set('assets', 'bad', '下载失败：' + e.message);
+    }
+  }
+
+  async function testPing() {
+    const times = [];
+    for (let i = 0; i < 5; i++) {
+      const t0 = performance.now();
+      try {
+        const res = await fetch('./api/v2/health', {cache: 'no-store'});
+        if (!res.ok) throw new Error('HTTP ' + res.status);
+        times.push(performance.now() - t0);
+      } catch (e) {
+        set('ping', 'bad', '连不上同步服务器：' + e.message);
+        return;
+      }
+    }
+    times.sort((a, b) => a - b);
+    const mid = times[2];
+    set('ping', mid < 250 ? 'ok' : mid < 600 ? 'warn' : 'bad', `中位数 ${ms(mid)}（最快 ${ms(times[0])}，最慢 ${ms(times[4])}）`);
+  }
+
+  function testStream() {
+    return new Promise(resolve => {
+      const es = new EventSource('./api/v2/ping-stream');
+      const t0 = performance.now();
+      let n = 0, last = t0, maxGap = 0;
+      const finish = (state, detail) => { es.close(); set('stream', state, detail); resolve(); };
+      const timer = setTimeout(() => {
+        finish(n >= 18 ? 'warn' : 'bad', `60 秒内只收到 ${n} / 21 次心跳，连接不稳定`);
+      }, 75000);
+      es.onmessage = () => {
+        const now = performance.now();
+        if (n > 0) maxGap = Math.max(maxGap, now - last);
+        last = now;
+        n++;
+        set('stream', 'warn', `已保持 ${Math.round((now - t0) / 1000)} 秒，收到 ${n} / 21 次心跳`);
+        if (n >= 21) {
+          clearTimeout(timer);
+          finish(maxGap < 6000 ? 'ok' : 'warn', `60 秒没断，心跳最大间隔 ${(maxGap / 1000).toFixed(1)} 秒${maxGap < 6000 ? '' : '（有卡顿，可能被缓存或限速）'}`);
+        }
+      };
+      es.onerror = () => {
+        if (n >= 21) return;
+        clearTimeout(timer);
+        finish('bad', n ? `第 ${Math.round((performance.now() - t0) / 1000)} 秒断开了（收到 ${n} 次心跳）` : '连不上实时通道');
+      };
+    });
+  }
+
+  Promise.all([testMath(), testAssets(), testPing().then(testStream)]).then(() => {
+    const states = Object.values(items).map(it => it.state);
+    const v = document.getElementById('verdict');
+    if (states.includes('bad')) { v.textContent = '✗ 有项目不通过，把结果发给对方'; v.className = 'bad'; }
+    else if (states.includes('warn')) { v.textContent = '! 能用，但有项目偏慢'; v.className = 'warn'; }
+    else { v.textContent = '✓ 全部正常，可以开始讲题'; v.className = 'ok'; }
+  });
+
+  document.getElementById('copyBtn').addEventListener('click', async () => {
+    const text = ['连接测试 ' + new Date().toLocaleString(), ...Object.values(items).map(it =>
+      `${{ok: '✓', bad: '✗', warn: '!', wait: '…'}[it.state]} ${it.name}：${it.detail}`)].join('\n');
+    try { await navigator.clipboard.writeText(text); document.getElementById('copyBtn').textContent = '已复制'; }
+    catch { prompt('复制下面的文字', text); }
+  });
+})();
+</script>
+</body>
+</html>

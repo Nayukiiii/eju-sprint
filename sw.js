@@ -1,4 +1,4 @@
-const CACHE = 'eju-sprint-stage3-v9';
+const CACHE = 'eju-sprint-stage3-v10';
 const ASSETS = [
   './',
   './index.html',
@@ -19,6 +19,9 @@ const ASSETS = [
   './sync.js',
   './ai_verify.js',
   './vendor/anthropic-sdk.js',
+  './vendor/katex/katex.min.css',
+  './vendor/katex/katex.min.js',
+  './vendor/katex/contrib/auto-render.min.js',
   './manifest.webmanifest',
   './icon.svg',
   './icon-192.png',
@@ -46,7 +49,7 @@ self.addEventListener('fetch', event => {
   if (event.request.method !== 'GET' || url.origin !== location.origin || url.pathname.startsWith('/api/')) return;
 
   // For paper scan PNGs, use cache-first for fast image flipping; for code files, use network-first so updates apply immediately
-  if (url.pathname.startsWith('/papers/')) {
+  if (url.pathname.startsWith('/papers/') || url.pathname.startsWith('/vendor/')) {
     event.respondWith(
       caches.match(event.request).then(hit => hit || fetch(event.request).then(response => {
         if (response && response.status === 200) {

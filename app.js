@@ -592,7 +592,62 @@
   }
 
   // Stage 2: Marksheet state & Bilingual state
-  let showChinese = localStorage.getItem('eju_lang_cn') !== 'false'; // default ON (true)
+  // Language modes: bi = Japanese + Chinese below; jp = Japanese first, Chinese only after 「看不懂」 or answering;
+  // cn = Chinese as the main text (for the person explaining)
+  const LANG_LABEL = {bi: '双语', jp: '日文优先', cn: '中文'};
+  let langMode = localStorage.getItem('eju_lang_mode') || (localStorage.getItem('eju_lang_cn') === 'false' ? 'jp' : 'bi');
+  if (!LANG_LABEL[langMode]) langMode = 'bi';
+  const revealedCn = new Set(); // cards whose Chinese was opened in 日文优先 mode this session
+  const cnVisible = card => langMode !== 'jp' || revealedCn.has(card.id);
+
+  function cycleLangMode() {
+    langMode = {bi: 'jp', jp: 'cn', cn: 'bi'}[langMode];
+    try { localStorage.setItem('eju_lang_mode', langMode); } catch {}
+  }
+
+  function setLangButton(btn) {
+    if (!btn) return;
+    btn.textContent = `语言：${LANG_LABEL[langMode]}`;
+    btn.className = `btn btn-sm btn-lang${langMode === 'jp' ? ' is-jp' : ''}`;
+  }
+
+  // Remember which questions needed the Chinese, so the explainer can see where the Japanese got in the way
+  function recordLangHelp(card) {
+    if (!state.langHelp) state.langHelp = {};
+    const prev = state.langHelp[card.id] || {n: 0};
+    state.langHelp[card.id] = {n: prev.n + 1, at: Date.now()};
+    saveState();
+  }
+
+  // Fill the question / choices text for the current language mode without re-rendering (keeps an answered state)
+  function applyStudyLang(card, {questionEl, subEl, revealBtn, choicesBox}) {
+    const show = cnVisible(card);
+    const main = langMode === 'cn' && card.q_cn ? card.q_cn : (card.q || card.q_cn);
+    const other = langMode === 'cn' ? card.q : card.q_cn;
+    questionEl.textContent = main;
+    if (show && other && other !== main) {
+      subEl.hidden = false;
+      subEl.textContent = `${langMode === 'cn' ? '日文原文' : '中文译文'}：${other}`;
+    } else {
+      subEl.hidden = true;
+    }
+    if (revealBtn) revealBtn.hidden = show || !card.q_cn;
+    choicesBox?.querySelectorAll('.choice-btn').forEach(btn => {
+      const cn = btn.querySelector('.choice-cn');
+      if (cn) cn.hidden = !show;
+    });
+    renderMathIn(questionEl.parentElement);
+  }
+
+  function revealStudyChinese(record) {
+    if (!activeCard || cnVisible(activeCard)) return;
+    revealedCn.add(activeCard.id);
+    if (record) recordLangHelp(activeCard);
+    applyStudyLang(activeCard, studyLangEls());
+  }
+
+  const studyLangEls = () => ({questionEl: $('#studyQuestion'), subEl: $('#studyQuestionSub'),
+    revealBtn: $('#studyCnRevealBtn'), choicesBox: $('#studyChoices')});
   let markCells = [];
   let activeCellIdx = 0;
   let markValues = [];
@@ -614,23 +669,7 @@
     $('#studyTopicTag').textContent = activeCard.topic;
     applySourceTagAndBanner(activeCard, $('#studySourceTag'), $('#studyAuditBanner'));
 
-    // Question text with bilingual toggle support (default ON)
-    const qCn = activeCard.q_cn;
-    const qJp = activeCard.q;
-    // The exam is in Japanese: the original is always the main text, Chinese is an aid below it
-    $('#studyQuestion').textContent = qJp || qCn;
-    if (showChinese && qCn && qCn !== qJp) {
-      $('#studyQuestionSub').hidden = false;
-      $('#studyQuestionSub').textContent = `中文译文：${qCn}`;
-    } else {
-      $('#studyQuestionSub').hidden = true;
-    }
-
-    const langBtn = $('#studyLangToggleBtn');
-    if (langBtn) {
-      langBtn.textContent = showChinese ? '中文：开' : '中文：关';
-      langBtn.className = showChinese ? 'btn btn-sm btn-lang' : 'btn btn-sm btn-lang is-jp';
-    }
+    setLangButton($('#studyLangToggleBtn'));
 
     // Reset helper boxes
     $('#studyHintBox').hidden = true;
@@ -679,8 +718,10 @@
         btn.type = 'button';
         btn.className = 'choice-btn';
         const cnText = chineseAddition(choiceText, cnList[idx]);
-        const cn = showChinese && cnText ? `<span class="choice-cn">${cnText}</span>` : '';
-        btn.innerHTML = `<span class="choice-key">${idx + 1}</span><span class="choice-body"><span class="choice-jp">${choiceText}</span>${cn}</span>`;
+        const main = langMode === 'cn' && cnText ? cnText : choiceText;
+        const sub = langMode === 'cn' ? (cnText ? choiceText : '') : cnText;
+        const cn = sub ? `<span class="choice-cn">${sub}</span>` : '';
+        btn.innerHTML = `<span class="choice-key">${idx + 1}</span><span class="choice-body"><span class="choice-jp">${main}</span>${cn}</span>`;
         btn.addEventListener('click', () => handleAnswerMcq(idx, btn));
         choicesBox.appendChild(btn);
       });
@@ -690,6 +731,7 @@
       markPanel.hidden = true;
     }
 
+    applyStudyLang(activeCard, studyLangEls());
     renderMathIn($('#view-study'));
   }
 
@@ -778,6 +820,7 @@
       return;
     }
     answered = true;
+    revealStudyChinese(false);
     let allCorrect = true;
     const blanks = activeCard.blanks || [];
 
@@ -820,6 +863,7 @@
   function handleAnswerMcq(choiceIdx, clickedBtn) {
     if (answered) return;
     answered = true;
+    revealStudyChinese(false);
     const isCorrect = choiceIdx === activeCard.a;
 
     $$('#studyChoices .choice-btn').forEach((btn, idx) => {
@@ -837,12 +881,8 @@
     const norm = t => String(t).replace(/[·・\s]/g, '').replace(/[「」（）()]/g, '');
     let extra = cn;
     if (cn.startsWith(ja)) extra = cn.slice(ja.length).replace(/^（|）$/g, '');
-    if (!extra.trim()) return '';
-    // Mostly the same characters (simplified vs. Japanese forms differ only here and there) → an echo
-    const chars = [...norm(extra)];
-    const jaChars = new Set(norm(ja));
-    const shared = chars.filter(ch => jaChars.has(ch)).length;
-    return chars.length && shared / chars.length >= 0.6 ? '' : extra;
+    // Hide only an exact echo (e.g. 台湾（台湾）); anything with different characters is a real translation
+    return norm(extra) === norm(ja) ? '' : extra;
   }
 
   function mcqAnswerText(card) {
@@ -852,6 +892,7 @@
   function handleAnswerUnsure() {
     if (answered || !activeCard) return;
     answered = true;
+    revealStudyChinese(false);
     if (activeCard.type === 'mcq') {
       $$('#studyChoices .choice-btn').forEach((btn, idx) => {
         btn.disabled = true;
@@ -869,6 +910,7 @@
   function handleRevealFlip() {
     if (answered) return;
     answered = true;
+    revealStudyChinese(false);
     $('#studyFlipBar').hidden = true;
     showStudyFeedback(null, activeCard.back);
   }
@@ -1081,9 +1123,9 @@
       const ansText = c.type === 'mark'
         ? (c.ansSummary || (c.blanks || []).map(b => `${b.label}=${b.ans}`).join(', '))
         : c.type === 'mcq'
-        ? (showChinese && c.choices_cn ? c.choices_cn[c.a] : c.choices[c.a])
+        ? (langMode === 'cn' && c.choices_cn ? c.choices_cn[c.a] : c.choices[c.a])
         : c.back;
-      const qText = showChinese && c.q_cn ? c.q_cn : c.q;
+      const qText = langMode === 'cn' && c.q_cn ? c.q_cn : c.q;
       const item = document.createElement('div');
       item.className = 'wrong-item';
       item.innerHTML = `
@@ -1456,20 +1498,8 @@
     const bmBtn = $('#tutorBookmarkBtn');
     bmBtn.textContent = isBookmarked(card) ? '已在待讲 ✓' : '加入待讲';
 
-    // Bilingual display for question (Japanese original + collapsible Chinese)
-    $('#tutorQuestionText').textContent = card.q;
-    if (showChinese && card.q_cn) {
-      $('#tutorQuestionSub').hidden = false;
-      $('#tutorQuestionSub').textContent = `中文译文：${card.q_cn}`;
-    } else {
-      $('#tutorQuestionSub').hidden = true;
-    }
-
-    const tutorLangBtn = $('#tutorLangToggleBtn');
-    if (tutorLangBtn) {
-      tutorLangBtn.textContent = showChinese ? '中文：开' : '中文：关 (原文)';
-      tutorLangBtn.className = showChinese ? 'btn btn-sm btn-lang' : 'btn btn-sm btn-lang is-jp';
-    }
+    applyStudyLang(card, {questionEl: $('#tutorQuestionText'), subEl: $('#tutorQuestionSub'), revealBtn: $('#tutorCnRevealBtn')});
+    setLangButton($('#tutorLangToggleBtn'));
 
     // Choices / Mark blanks box
     const choicesBox = $('#tutorChoicesBox');
@@ -2024,9 +2054,20 @@
     $('#closeRefModalBtn').addEventListener('click', () => { $('#refModal').hidden = true; });
     $('#studyRevealFlipBtn').addEventListener('click', handleRevealFlip);
     $('#studyLangToggleBtn')?.addEventListener('click', () => {
-      showChinese = !showChinese;
-      localStorage.setItem('eju_lang_cn', String(showChinese));
-      if (activeCard) renderStudyCard();
+      cycleLangMode();
+      setLangButton($('#studyLangToggleBtn'));
+      if (!activeCard) return;
+      // Re-rendering resets an answered card, so only redraw the text once the answer is in
+      if (answered) applyStudyLang(activeCard, studyLangEls());
+      else renderStudyCard();
+    });
+    $('#studyCnRevealBtn')?.addEventListener('click', () => revealStudyChinese(true));
+    $('#tutorCnRevealBtn')?.addEventListener('click', () => {
+      const card = tutorCardsList[tutorCardIdx];
+      if (!card) return;
+      revealedCn.add(card.id);
+      recordLangHelp(card);
+      applyStudyLang(card, {questionEl: $('#tutorQuestionText'), subEl: $('#tutorQuestionSub'), revealBtn: $('#tutorCnRevealBtn')});
     });
     $('#studyUnsureBtn')?.addEventListener('click', handleAnswerUnsure);
 
@@ -2124,8 +2165,7 @@
 
     // Bilingual toggle in tutor view
     $('#tutorLangToggleBtn')?.addEventListener('click', () => {
-      showChinese = !showChinese;
-      localStorage.setItem('eju_lang_cn', String(showChinese));
+      cycleLangMode();
       renderTutorCard();
     });
 
@@ -2133,7 +2173,7 @@
     $('#tutorPasteQuestionBtn')?.addEventListener('click', () => {
       const card = tutorCardsList[tutorCardIdx];
       if (!card) return;
-      const qText = showChinese && card.q_cn ? card.q_cn : card.q;
+      const qText = langMode === 'cn' && card.q_cn ? card.q_cn : card.q;
       if (window.EJU_WHITEBOARD) {
         // Switch to Whiteboard tab
         const boardTab = document.querySelector('.tool-tab[data-tool="board"]');

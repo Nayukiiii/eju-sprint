@@ -22,6 +22,7 @@ Endpoints (JSON; auth with `Authorization: Bearer <member token>`):
   POST /api/v2/live     {payload}                      -> broadcast only, not stored
   GET  /api/v2/stream?since=SEQ                        -> SSE: backlog, then live push
   GET  /api/v2/health
+  GET  /api/v2/ping-stream                             -> SSE test for check.html: a ping every 3 s for 60 s
 
 Configuration (environment variables):
   EJU_SYNC_DB          SQLite file            (default ./eju_sync.db)
@@ -52,6 +53,7 @@ STATIC_DIR = os.environ.get('EJU_STATIC_DIR')
 MAX_BODY = 2 * 1024 * 1024
 MAX_EVENTS_PER_POST = 500
 HEARTBEAT_SECONDS = 15
+PING_STREAM = threading.BoundedSemaphore(10)  # check.html connection tests; no auth, so keep them few
 
 REPLACEABLE_KINDS = {'progress', 'bookmark', 'task', 'stroke'}
 APPEND_KINDS = {'history', 'mock'}
@@ -299,6 +301,8 @@ class Handler(BaseHTTPRequestHandler):
         try:
             if route == ('GET', '/health'):
                 return self.send_json(HTTPStatus.OK, {'ok': True})
+            if route == ('GET', '/ping-stream'):
+                return self.ping_stream()
             if route == ('POST', '/groups'):
                 body = self.read_json()
                 token = STORE.create_group(clean_name(body.get('groupName'), '小组名'),
@@ -373,6 +377,26 @@ class Handler(BaseHTTPRequestHandler):
             pass
         finally:
             HUB.unsubscribe(member['group_id'], q)
+
+    def ping_stream(self):
+        if not PING_STREAM.acquire(blocking=False):
+            raise ApiError(HTTPStatus.TOO_MANY_REQUESTS, '测试连接太多，稍后再试')
+        try:
+            self.send_response(HTTPStatus.OK)
+            self.send_header('Content-Type', 'text/event-stream; charset=utf-8')
+            self.send_header('Cache-Control', 'no-store')
+            self.send_header('X-Accel-Buffering', 'no')
+            self.send_header('Connection', 'close')
+            self.end_headers()
+            self.close_connection = True
+            for i in range(21):
+                self.send_sse({'type': 'ping', 'n': i, 'at': now_ms()})
+                if i < 20:
+                    time.sleep(3)
+        except (BrokenPipeError, ConnectionResetError, TimeoutError, OSError):
+            pass
+        finally:
+            PING_STREAM.release()
 
     def send_sse(self, obj):
         data = json.dumps(obj, ensure_ascii=False)

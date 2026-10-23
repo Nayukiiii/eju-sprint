@@ -57,6 +57,15 @@ class SyncServerTest(unittest.TestCase):
         status, _ = self.call('GET', '/api/v2/me', token='nope')
         self.assertEqual(status, 401)
 
+    def test_ping_stream_needs_no_token(self):
+        conn = http.client.HTTPConnection('127.0.0.1', self.port, timeout=5)
+        conn.request('GET', '/api/v2/ping-stream')
+        res = conn.getresponse()
+        self.assertEqual(res.status, 200)
+        self.assertIn('text/event-stream', res.getheader('Content-Type'))
+        self.assertEqual(json.loads(res.readline()[len(b'data: '):])['type'], 'ping')
+        conn.close()
+
     def test_bad_invite_and_member_limit(self):
         status, _ = self.call('POST', '/api/v2/join', {'inviteCode': 'x', 'memberName': 'C'})
         self.assertEqual(status, 404)
