@@ -23,8 +23,8 @@
   --warn-soft: rgba(240, 184, 87, 0.22);
   --radius: 10px;
   --shadow: none;
-  --font-serif: "Source Serif 4", "Noto Serif SC", "Noto Serif JP", "Songti SC", Georgia, serif;
-  --font-sans: "Noto Sans SC", "Noto Sans JP", -apple-system, BlinkMacSystemFont, "PingFang SC", "Hiragino Sans", "Microsoft YaHei", sans-serif;
+  --font-serif: "Source Serif 4", "Noto Serif SC", "Noto Serif JP", "Songti SC", "STSong", "SimSun", "Yu Mincho", "Hiragino Mincho ProN", Georgia, serif;
+  --font-sans: "Noto Sans SC", "Noto Sans JP", -apple-system, BlinkMacSystemFont, "PingFang SC", "Hiragino Sans", "Microsoft YaHei", "Yu Gothic UI", "Meiryo", sans-serif;
   --font-mono: "JetBrains Mono", "SFMono-Regular", Menlo, Consolas, monospace;
 }
 
@@ -3697,3 +3697,19 @@ h1, h2, h3, h4,
   .tutor-verdict-bar { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
   .tutor-verdict-bar .btn { padding: 12px 6px; font-size: 15px; }
 }
+
+/* 日文优先：每题一个「看不懂」 */
+.cn-reveal-btn {
+  display: inline-block;
+  margin: 2px 0 12px;
+  padding: 6px 14px;
+  border: 1px dashed var(--border);
+  border-radius: 999px;
+  background: transparent;
+  color: var(--text-muted);
+  font: inherit;
+  font-size: 14px;
+  cursor: pointer;
+}
+.cn-reveal-btn:hover { color: var(--primary); border-color: currentColor; }
+.cn-reveal-btn[hidden] { display: none; }

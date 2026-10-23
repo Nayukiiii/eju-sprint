@@ -1096,9 +1096,9 @@
     quad: '二次函数',
     expr: '数与式',
     trig: '图形与计量',
-    prob: '場合の数・確率',
-    integers: '整数の性質',
-    stats: 'データの分析',
+    prob: '排列组合·概率',
+    integers: '整数性质',
+    stats: '数据分析',
     geogebra: 'GeoGebra'
   };
 
