@@ -51,7 +51,7 @@
     root.innerHTML = `
       <article class="card">
         <div class="section-head"><div>
-          <h2 class="section-title">刷真题 · 模拟考场</h2>
+          <h2 class="section-title">数学真题模考</h2>
           <p class="section-sub">整回真题、按原卷顺序、倒计时自动交卷。考试中不显示对错，交卷后再看报告和解析。</p>
         </div></div>
         ${run ? `<div class="mock-resume"><b>有一场考试进行中</b>（${esc(run.label)}）<button class="btn btn-primary btn-sm" id="mockResumeBtn" type="button">继续考试</button></div>` : ''}
@@ -68,7 +68,7 @@
           ${list.map(s => `<button class="mock-sitting" data-sit="${s.id}" type="button">
             <b>${s.label}</b><span>${s.cards.length} 道 · ${blankCount(s.cards)} 空</span></button>`).join('')}
         </div>
-        <p class="stat-hint">仿真卷：文综模考（非真题）尚未开放。</p>
+        <p class="stat-hint">文综的仿真卷模考是单独的页面，还没做（任务书见 docs/mock_bunso_prompt.md）。</p>
       </article>
       <article class="card">
         <h3 class="section-title">模考记录</h3>
