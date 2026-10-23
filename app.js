@@ -326,15 +326,20 @@
     let bunsoCount = 0;
     let mathCount = 0;
     let wrongCleared = 0;
+    let correctCount = 0;
     for (const h of todayLogs) {
       const c = cards.find(x => x.id === h.id);
       if (!c) continue;
       if (isMathCard(c)) mathCount++;
       else bunsoCount++;
       if (h.clearedWrong) wrongCleared++;
+      if (h.grade === 'good') correctCount++;
     }
+    const accuracy = todayLogs.length ? Math.round((correctCount / todayLogs.length) * 100) : 0;
     return {
       total: todayLogs.length,
+      correctCount,
+      accuracy,
       bunsoCount,
       mathCount,
       wrongCleared
@@ -400,6 +405,13 @@
     $('#statMasteryPct').textContent = `${masteryPct}%`;
     $('#statMasterySub').textContent = `已核实 ${masteredCount}/${verifiedPool.length} (未核实${unverifiedCount}不计)`;
     $('#statMasteryBar').style.width = `${masteryPct}%`;
+
+    if ($('#statAccuracyPct')) {
+      const hasLogs = todayStats.total > 0;
+      $('#statAccuracyPct').textContent = hasLogs ? `${todayStats.accuracy}%` : '--%';
+      $('#statAccuracySub').textContent = `对 ${todayStats.correctCount} / ${todayStats.total} 题`;
+      $('#statAccuracyBar').style.width = hasLogs ? `${todayStats.accuracy}%` : '0%';
+    }
 
     $('#navWrongBadge').textContent = String(wrongCount);
     const planDone = cards.filter(isPracticed).length;
@@ -1447,9 +1459,10 @@
     const box = $('#mockList');
     if (!box) return;
     const all = state.mocks || [];
-    const kindOf = m => (m.kind === 'bunso' ? 'bunso' : (m.real ? 'math' : 'manual'));
+    const kindOf = m => (m.kind === 'bunso' ? (m.real ? 'bunso_real' : 'bunso') : (m.real ? 'math' : 'manual'));
     const pct = m => (m.total ? Math.round((m.correct / m.total) * 100) : Math.round((m.score / 200) * 100));
     const groups = [
+      ['bunso_real', '文综真题模考', m => `正确 ${m.correct}/${m.total} 题（${m.score}%）`],
       ['math', '数学真题模考', m => `正确 ${m.correct}/${m.total} 空（${pct(m)}%）`],
       ['bunso', '文综仿真卷（非真题）', m => `正确 ${m.correct}/${m.total} 题（${m.score}%）`],
       ['manual', '手动记录的成绩', m => `${m.subject} · ${m.score} 分`]
