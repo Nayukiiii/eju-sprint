@@ -1167,6 +1167,7 @@
             </div>
           </div>
           <div class="wrong-item-q">${qText}</div>
+          ${state.hwNotes?.[c.id] ? `<p class="wrong-hw-note">作业「${escapeHtml(state.hwNotes[c.id].title)}」批改：${escapeHtml(state.hwNotes[c.id].comment || (state.hwNotes[c.id].verdict === 'half' ? '半对' : '错'))}</p>` : ''}
           <div class="wrong-item-ans">正确答案：${ansText}</div>
         </div>
         <div class="wrong-item-actions">
@@ -1953,6 +1954,8 @@
       renderWrongBook();
     } else if (route === 'plan') {
       renderLinkedPlan();
+    } else if (route === 'homework') {
+      window.EJU_HW?.render();
     } else if (route === 'audit') {
       renderStage1AuditView();
       renderMathIn($('#view-audit'));
@@ -2094,6 +2097,20 @@
       }
     },
     boardTitle: id => state.boardPages?.[id]?.title || null,
+    saveState,
+    renderMath: renderMathIn,
+    // Homework: open an item's work board (with its math question on the left when there is one)
+    openBoard(boardId, cardId) {
+      if (cardId) openMathTutorWithCard(cardId);
+      else if (currentRoute !== 'math') switchRoute('math');
+      openBoardPage(boardId);
+      notifyTutorChanged();
+    },
+    addToWrongBook(card, note) {
+      recordCardGrade(card, 'again');
+      state.hwNotes = state.hwNotes || {};
+      state.hwNotes[card.id] = {...note, at: Date.now()};
+    },
     refreshBoardPages: renderBoardPageSelect,
   };
 

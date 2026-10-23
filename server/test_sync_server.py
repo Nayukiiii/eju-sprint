@@ -98,6 +98,56 @@ class SyncServerTest(unittest.TestCase):
         self.assertEqual(me['role'], 'student')
         self.assertTrue(me['teacher_invite'])
 
+    def make_class(self):
+        a, _ = self.make_pair()
+        status, t = self.call('POST', '/api/v2/join', {'inviteCode': a['group']['teacherInviteCode'], 'memberName': '老师'})
+        return a, t
+
+    def test_homework_roles_and_notices(self):
+        srv.BOT_TOKEN = 'bot-secret'
+        s, t = self.make_class()
+        hw = {'kind': 'assignment', 'key': 'hw1', 'at': 1, 'payload': {'title': '二次函数', 'items': [{}, {}], 'dueText': '明晚'}}
+        status, _ = self.call('POST', '/api/v2/events', {'events': [hw]}, token=s['token'])
+        self.assertEqual(status, 403)  # a student cannot assign
+        status, _ = self.call('POST', '/api/v2/events', {'events': [hw]}, token=t['token'])
+        self.assertEqual(status, 200)
+        sub = {'kind': 'submission', 'key': 'hw1', 'at': 2, 'payload': {'title': '二次函数', 'submittedAt': 5, 'round': 1}}
+        status, _ = self.call('POST', '/api/v2/events', {'events': [sub]}, token=t['token'])
+        self.assertEqual(status, 403)  # a teacher cannot submit for the student
+        self.call('POST', '/api/v2/events', {'events': [sub]}, token=s['token'])
+        self.call('POST', '/api/v2/events', {'events': [{**sub, 'at': 3}]}, token=s['token'])  # same submit again: no new notice
+        grade = {'kind': 'grade', 'key': 'hw1', 'at': 4, 'payload': {'title': '二次函数', 'returnedAt': 9, 'summary': '2/2 对'}}
+        self.call('POST', '/api/v2/events', {'events': [grade]}, token=t['token'])
+        status, _ = self.call('GET', '/api/v2/notifications')
+        self.assertEqual(status, 401)
+        conn = http.client.HTTPConnection('127.0.0.1', self.port, timeout=5)
+        conn.request('GET', '/api/v2/notifications?since=0', headers={'X-Bot-Token': 'bot-secret'})
+        texts = [n['text'] for n in json.loads(conn.getresponse().read())['notices']]
+        conn.close()
+        self.assertEqual(texts[-3:], ['老师 布置了新作业「二次函数」（2 题，截止 明晚）', 'A 提交了作业「二次函数」',
+                                      '老师 批改完了作业「二次函数」：2/2 对'])
+
+    def test_photo_upload(self):
+        a, _ = self.make_pair()
+        png = b'\x89PNG\r\n\x1a\n' + b'0' * 100
+        conn = http.client.HTTPConnection('127.0.0.1', self.port, timeout=5)
+        conn.request('POST', '/api/v2/files', png, {'Content-Type': 'image/png', 'Authorization': f"Bearer {a['token']}"})
+        res = conn.getresponse()
+        url = json.loads(res.read())['url']
+        self.assertEqual(res.status, 200)
+        conn.request('GET', url)
+        res = conn.getresponse()
+        self.assertEqual((res.status, res.getheader('Content-Type'), res.read()), (200, 'image/png', png))
+        conn.request('POST', '/api/v2/files', b'<script>', {'Content-Type': 'text/html', 'Authorization': f"Bearer {a['token']}"})
+        res = conn.getresponse()
+        res.read()
+        self.assertEqual(res.status, 415)
+        conn.request('GET', '/api/v2/files/..%2Fsecret')
+        res = conn.getresponse()
+        res.read()
+        self.assertEqual(res.status, 404)
+        conn.close()
+
     def test_ping_stream_needs_no_token(self):
         conn = http.client.HTTPConnection('127.0.0.1', self.port, timeout=5)
         conn.request('GET', '/api/v2/ping-stream')

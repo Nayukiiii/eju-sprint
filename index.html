@@ -39,6 +39,7 @@
     <nav class="main-nav" aria-label="主导航">
       <button class="nav-tab is-active" data-route="today" type="button"><span class="nav-full">刷题与速查</span><span class="nav-short">刷题</span></button>
       <button class="nav-tab" data-route="math" type="button"><span class="nav-full">数学讲题台</span><span class="nav-short">讲题</span></button>
+      <button class="nav-tab" data-route="homework" type="button"><span class="nav-full">作业</span><span class="nav-short">作业</span> <span class="nav-badge" id="navHwBadge" hidden>0</span></button>
       <button class="nav-tab" data-route="wrong" type="button"><span class="nav-full">错题本</span><span class="nav-short">错题</span> <span class="nav-badge" id="navWrongBadge">0</span></button>
       <button class="nav-tab" data-route="plan" type="button"><span class="nav-full">17天方案</span><span class="nav-short">方案</span> <span class="nav-badge nav-badge-ok" id="navPlanBadge">0%</span></button>
       <button class="nav-tab" data-route="audit" type="button"><span class="nav-full">阶段1核验报告</span><span class="nav-short">核验</span> <span class="nav-badge nav-badge-ok" id="navAuditBadge">34/34 已核</span></button>
@@ -682,6 +683,10 @@
     <!-- ═══════════════════════════════════════════════════════════════════
          视图 4：错题本（独立页面、原题 1 次 ＋ 同考点变式 1 次移出、支持一键重刷）
          ═══════════════════════════════════════════════════════════════════ -->
+    <section class="view" id="view-homework">
+      <div id="hwRoot"></div>
+    </section>
+
     <section class="view" id="view-wrong">
       <article class="card">
         <div class="section-head">
@@ -969,6 +974,7 @@
     <script src="./whiteboard.js"></script>
   <script src="./math_tools.js"></script>
   <script src="./app.js"></script>
+  <script src="./homework.js"></script>
   <script src="./sync.js"></script>
   <script type="module" src="./ai_verify.js"></script>
 </body>

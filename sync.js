@@ -46,7 +46,8 @@
   let lessonFollow = load(KEYS.lessonFollow, true);
 
   function normalizeSnapshot(s) {
-    return {progress: {}, bookmarks: {}, tasks: {}, history: {}, mocks: {}, strokes: {}, langhelp: {}, pages: {}, ...(s || {})};
+    return {progress: {}, bookmarks: {}, tasks: {}, history: {}, mocks: {}, strokes: {}, langhelp: {}, pages: {},
+      assignment: {}, submission: {}, grade: {}, ...(s || {})};
   }
 
   function persist() {
@@ -116,6 +117,18 @@
         events.push({kind: 'bookmark', key: id, at: now, payload: {on}});
       }
     }
+    // Homework: the teacher writes assignments and grades, the student writes submissions
+    const hwKinds = isTeacher() ? [['assignment', 'assignments'], ['grade', 'grades']] : [['submission', 'submissions']];
+    for (const [kind, field] of hwKinds) {
+      for (const [id, v] of Object.entries(state.hw?.[field] || {})) {
+        const h = hashOf(v);
+        if (snapshot[kind][id] !== h) {
+          snapshot[kind][id] = h;
+          events.push({kind, key: id, at: now, payload: v});
+        }
+      }
+    }
+
     // The study record belongs to the student; the teacher's browser only shows it
     if (isTeacher()) {
       queue(events);
@@ -230,6 +243,7 @@
     const deferred = [];
     let pagesChanged = false;
     let lessonEvent = null;
+    const hwNews = [];
 
     const apply = state => {
       for (const ev of events) {
@@ -257,6 +271,14 @@
           state.boardPages[ev.key] = p;
           snapshot.pages[ev.key] = hashOf(p);
           pagesChanged = true;
+        } else if (ev.kind === 'assignment' || ev.kind === 'submission' || ev.kind === 'grade') {
+          const field = {assignment: 'assignments', submission: 'submissions', grade: 'grades'}[ev.kind];
+          state.hw = state.hw || {};
+          state.hw[field] = state.hw[field] || {};
+          const prev = state.hw[field][ev.key];
+          state.hw[field][ev.key] = p;
+          snapshot[ev.kind][ev.key] = hashOf(p);
+          if (ev.member !== myId()) hwNews.push(homeworkNews(ev.kind, p, prev, ev.member));
         } else if (ev.kind === 'lesson') {
           if (ev.member !== myId()) lessonEvent = {...p, member: ev.member};
         } else if (ev.kind === 'mock') {
@@ -297,8 +319,21 @@
     persist();
     touchedCards.forEach(pushPartnerLayers);
     if (pagesChanged) window.EJU_APP.refreshBoardPages?.();
+    const news = hwNews.filter(Boolean);
+    if (hwNews.length) window.EJU_HW?.onRemote();
+    // Only announce changes that arrive live, not the backlog replayed on first connect
+    if (news.length && connected) notify(news[news.length - 1]);
     if (lessonEvent) onLessonState(lessonEvent);
     if (deferred.length) setTimeout(() => applyEvents(deferred), 400);
+  }
+
+  function homeworkNews(kind, p, prev, member) {
+    const who = memberName(member);
+    const title = p?.title || '作业';
+    if (kind === 'assignment' && !prev && !p?.deleted) return `${who} 布置了新作业「${title}」`;
+    if (kind === 'submission' && p?.submittedAt && p.submittedAt !== prev?.submittedAt) return `${who} 交了作业「${title}」`;
+    if (kind === 'grade' && p?.returnedAt && p.returnedAt !== prev?.returnedAt) return `${who} 批改完了「${title}」${p.summary ? `：${p.summary}` : ''}`;
+    return null;
   }
 
   // ─── Lesson mode ───
