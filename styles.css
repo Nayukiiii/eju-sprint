@@ -3862,3 +3862,10 @@ h1, h2, h3, h4,
 .mock-rrow.is-ok { background: #eef4ea; }
 .mock-rrow.is-bad { background: #fbeee8; }
 .mock-wrongs { font-size: 13px; color: #8a3a22; }
+.mockb-choices { display: flex; flex-direction: column; gap: 8px; margin: 10px 0; }
+.mockb-choice { display: flex; gap: 10px; align-items: flex-start; text-align: left; padding: 12px; border: 1.5px solid #d9d3c5; border-radius: 12px; background: #fffdf8; font: inherit; color: inherit; cursor: pointer; }
+.mockb-choice b { min-width: 22px; height: 22px; border-radius: 50%; background: #f3f0e9; text-align: center; line-height: 22px; font-size: 13px; }
+.mockb-choice small { display: block; color: #7a746a; margin-top: 2px; }
+.mockb-choice.is-picked { border-color: #d67052; background: #fbeee8; }
+.mockb-choice.is-picked b { background: #d67052; color: #fff; }
+.mock-opts { display: flex; flex-wrap: wrap; gap: 10px 16px; }

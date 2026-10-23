@@ -40,6 +40,7 @@
       <button class="nav-tab is-active" data-route="today" type="button"><span class="nav-full">刷题与速查</span><span class="nav-short">刷题</span></button>
       <button class="nav-tab" data-route="math" type="button"><span class="nav-full">数学讲题台</span><span class="nav-short">讲题</span></button>
       <button class="nav-tab" data-route="mock" type="button"><span class="nav-full">数学模考</span><span class="nav-short">数模</span></button>
+      <button class="nav-tab" data-route="mockb" type="button"><span class="nav-full">文综模考</span><span class="nav-short">文模</span></button>
       <button class="nav-tab" data-route="homework" type="button"><span class="nav-full">作业</span><span class="nav-short">作业</span> <span class="nav-badge" id="navHwBadge" hidden>0</span></button>
       <button class="nav-tab" data-route="wrong" type="button"><span class="nav-full">错题本</span><span class="nav-short">错题</span> <span class="nav-badge" id="navWrongBadge">0</span></button>
       <button class="nav-tab" data-route="plan" type="button"><span class="nav-full">17天方案</span><span class="nav-short">方案</span> <span class="nav-badge nav-badge-ok" id="navPlanBadge">0%</span></button>
@@ -690,6 +691,10 @@
       <div id="mockRoot"></div>
     </section>
 
+    <section class="view" id="view-mockb">
+      <div id="mockbRoot"></div>
+    </section>
+
     <section class="view" id="view-homework">
       <div id="hwRoot"></div>
     </section>
@@ -1005,6 +1010,7 @@
   <script src="./app.js"></script>
   <script src="./homework.js"></script>
   <script src="./mock.js"></script>
+  <script src="./mock_bunso.js"></script>
   <script src="./sync.js"></script>
   <script type="module" src="./ai_verify.js"></script>
 </body>
