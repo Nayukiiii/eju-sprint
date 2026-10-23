@@ -349,7 +349,31 @@
     return streak;
   }
 
+  function langHelpCards() {
+    return Object.entries(state.langHelp || {})
+      .map(([id, v]) => ({card: cards.find(c => c.id === id), ...v}))
+      .filter(x => x.card)
+      .sort((a, b) => b.at - a.at);
+  }
+
+  function renderLangHelp() {
+    const box = $('#langHelpCard');
+    if (!box) return;
+    const list = langHelpCards();
+    box.hidden = !list.length;
+    if (!list.length) return;
+    const teacher = window.EJU_SYNC?.isTeacher?.();
+    $('#langHelpTitle').textContent = teacher ? `对方日语没看懂的题（${list.length}）` : `日语没看懂的题（${list.length}）`;
+    $('#langHelpPracticeBtn').hidden = Boolean(teacher);
+    $('#langHelpList').innerHTML = list.slice(0, 8).map(x => `
+      <li data-card-id="${escapeHtml(x.card.id)}">
+        <span class="lang-help-q">${escapeHtml(String(x.card.q).replace(/\$[^$]*\$/g, '…').slice(0, 42))}</span>
+        <span class="lang-help-meta">${escapeHtml(x.card.deck)}${x.n > 1 ? ` · ${x.n} 次` : ''}</span>
+      </li>`).join('');
+  }
+
   function renderTopBarAndDashboard() {
+    renderLangHelp();
     const diffDays = Math.max(0, Math.ceil((EXAM_AT.getTime() - Date.now()) / 86400000));
     $('#countdownBadge').textContent = `距 11/08 考试剩 ${diffDays} 天`;
     if ($('#heroCountdownVal')) $('#heroCountdownVal').textContent = `${diffDays} 天`;
@@ -1143,6 +1167,7 @@
             </div>
           </div>
           <div class="wrong-item-q">${qText}</div>
+          ${state.hwNotes?.[c.id] ? `<p class="wrong-hw-note">作业「${escapeHtml(state.hwNotes[c.id].title)}」批改：${escapeHtml(state.hwNotes[c.id].comment || (state.hwNotes[c.id].verdict === 'half' ? '半对' : '错'))}</p>` : ''}
           <div class="wrong-item-ans">正确答案：${ansText}</div>
         </div>
         <div class="wrong-item-actions">
@@ -1469,6 +1494,94 @@
     });
   }
 
+  // What is open on the tutor card. Shared with the partner during a lesson (sync.js), so it is plain data.
+  // expl = number of explanation steps shown (0 = closed)
+  let tutorReveal = {hint: false, expl: 0, ans: false};
+  let tutorBoardId = null; // null = this question's own board, else a blank page id
+  let applyingRemoteTutor = false;
+
+  function notifyTutorChanged() {
+    if (!applyingRemoteTutor) window.dispatchEvent(new CustomEvent('eju-tutor-changed'));
+  }
+
+  // Split the explanation into steps: a new step starts at each 【…】 heading or after a blank line
+  function chunkExplSteps(box) {
+    const chunks = [];
+    let cur = null;
+    for (const el of [...box.children]) {
+      if (el.classList.contains('ms-gap')) {
+        // A blank line ends the current step (unless it only holds its heading so far)
+        if (cur && [...cur.children].some(c => !c.classList.contains('ms-head'))) cur = null;
+        continue;
+      }
+      if (!cur || el.classList.contains('ms-head')) {
+        cur = document.createElement('div');
+        cur.className = 'ms-step';
+        chunks.push(cur);
+      }
+      cur.appendChild(el);
+    }
+    box.innerHTML = '';
+    chunks.forEach(c => box.appendChild(c));
+    return chunks.length;
+  }
+
+  function applyTutorReveal() {
+    const hintBox = $('#tutorStepHint');
+    const explBox = $('#tutorStepExpl');
+    const ansBox = $('#tutorStepAns');
+    const steps = [...explBox.querySelectorAll('.ms-step')];
+    const shown = Math.min(tutorReveal.expl, steps.length);
+    hintBox.hidden = !tutorReveal.hint;
+    explBox.hidden = shown === 0;
+    ansBox.hidden = !tutorReveal.ans;
+    steps.forEach((el, i) => { el.hidden = i >= shown; });
+    $$('.step-reveal-btn').forEach(b => {
+      const k = b.dataset.step;
+      b.classList.toggle('is-open', k === 'expl' ? shown > 0 : Boolean(tutorReveal[k]));
+    });
+    const nextBtn = $('#tutorNextStepBtn');
+    if (nextBtn) {
+      nextBtn.textContent = shown >= steps.length ? `步骤已全部展开（${steps.length}）` : `下一步 ${shown + 1}/${steps.length}`;
+      nextBtn.disabled = shown >= steps.length;
+    }
+    setTutorBlanksRevealed(tutorReveal.ans);
+    renderMathIn($('#view-math'));
+  }
+
+  // ─── Whiteboard pages: each question has its own board; blank pages are extra boards ───
+  function boardPages() {
+    return Object.entries(state.boardPages || {})
+      .filter(([, p]) => p && !p.deleted)
+      .sort((a, b) => a[1].at - b[1].at)
+      .map(([id, p]) => ({id, ...p}));
+  }
+
+  function renderBoardPageSelect() {
+    const sel = $('#wbPageSelect');
+    if (!sel) return;
+    const pages = boardPages();
+    sel.innerHTML = '<option value="">本题白板</option>'
+      + pages.map(p => `<option value="${escapeHtml(p.id)}">${escapeHtml(p.title)}</option>`).join('')
+      + '<option value="__new">＋ 新建空白页</option>';
+    sel.value = tutorBoardId && pages.some(p => p.id === tutorBoardId) ? tutorBoardId : '';
+  }
+
+  function openBoardPage(id) {
+    const card = tutorCardsList[tutorCardIdx];
+    tutorBoardId = id || null;
+    window.EJU_WHITEBOARD?.setCardId(tutorBoardId || card?.id);
+    renderBoardPageSelect();
+  }
+
+  function newBoardPage() {
+    const id = `page-${Date.now().toString(36)}${Math.random().toString(36).slice(2, 5)}`;
+    state.boardPages = state.boardPages || {};
+    state.boardPages[id] = {title: `空白页 ${boardPages().length + 1}`, at: Date.now()};
+    saveState();
+    openBoardPage(id);
+  }
+
   function renderTutorCard() {
     if (!tutorCardsList.length) tutorCardsList = cards.filter(isMathCard);
     if (tutorCardIdx >= tutorCardsList.length) tutorCardIdx = 0;
@@ -1548,13 +1661,10 @@
     const hintBox = $('#tutorStepHint');
     const explBox = $('#tutorStepExpl');
     const ansBox = $('#tutorStepAns');
-    hintBox.hidden = true;
-    explBox.hidden = true;
-    ansBox.hidden = true;
-    $$('.step-reveal-btn').forEach(b => b.classList.remove('is-open'));
 
     hintBox.innerHTML = `<div class="ms-head">破题公式</div>${formatMathInlineHtml(getCardHint(card))}`;
     explBox.innerHTML = formatMathStepsHtml(card.expl || '按基本公式代入即可。');
+    chunkExplSteps(explBox);
     const ansStr = card.type === 'mark'
       ? `マーク式正解：${card.ansSummary || (card.blanks || []).map(b => `${b.label}=${b.ans}`).join(', ')}`
       : card.type === 'mcq'
@@ -1568,8 +1678,15 @@
     // Automatically select the math tool matching this question's unit
     window.EJU_MATH_TOOLS?.autoSelect(card);
 
+    tutorReveal = {hint: false, expl: 0, ans: false};
+    applyTutorReveal();
+
     // Automatically load/restore handwritten whiteboard notes for this specific card
+    tutorBoardId = null;
     window.EJU_WHITEBOARD?.setCardId(card.id);
+    renderBoardPageSelect();
+    $('#wbPastePaperBtn') && ($('#wbPastePaperBtn').hidden = !card.paperImg);
+    notifyTutorChanged();
   }
 
   function openMathTutorWithCard(cardId) {
@@ -1837,6 +1954,8 @@
       renderWrongBook();
     } else if (route === 'plan') {
       renderLinkedPlan();
+    } else if (route === 'homework') {
+      window.EJU_HW?.render();
     } else if (route === 'audit') {
       renderStage1AuditView();
       renderMathIn($('#view-audit'));
@@ -1951,6 +2070,48 @@
     currentRoute: () => currentRoute,
     currentTutorCardId: () => (currentRoute === 'math' ? tutorCardsList[tutorCardIdx]?.id || null : null),
     openTutorCard: id => openMathTutorWithCard(id),
+    // Lesson mode (sync.js): what the explainer has open, and applying it on the listener's side
+    getTutorState() {
+      const card = tutorCardsList[tutorCardIdx];
+      if (currentRoute !== 'math' || !card) return null;
+      return {cardId: card.id, boardId: tutorBoardId, reveal: {...tutorReveal}};
+    },
+    applyTutorState(st) {
+      if (!st?.cardId) return;
+      applyingRemoteTutor = true;
+      try {
+        if (currentRoute !== 'math' || tutorCardsList[tutorCardIdx]?.id !== st.cardId) openMathTutorWithCard(st.cardId);
+        if (st.reveal) {
+          tutorReveal = {hint: Boolean(st.reveal.hint), expl: Number(st.reveal.expl) || 0, ans: Boolean(st.reveal.ans)};
+          applyTutorReveal();
+        }
+        if ((st.boardId || null) !== tutorBoardId) {
+          if (st.boardId && !state.boardPages?.[st.boardId]) {
+            state.boardPages = state.boardPages || {};
+            state.boardPages[st.boardId] = {title: st.boardTitle || '空白页', at: Date.now()};
+          }
+          openBoardPage(st.boardId);
+        }
+      } finally {
+        applyingRemoteTutor = false;
+      }
+    },
+    boardTitle: id => state.boardPages?.[id]?.title || null,
+    saveState,
+    renderMath: renderMathIn,
+    // Homework: open an item's work board (with its math question on the left when there is one)
+    openBoard(boardId, cardId) {
+      if (cardId) openMathTutorWithCard(cardId);
+      else if (currentRoute !== 'math') switchRoute('math');
+      openBoardPage(boardId);
+      notifyTutorChanged();
+    },
+    addToWrongBook(card, note) {
+      recordCardGrade(card, 'again');
+      state.hwNotes = state.hwNotes || {};
+      state.hwNotes[card.id] = {...note, at: Date.now()};
+    },
+    refreshBoardPages: renderBoardPageSelect,
   };
 
   // ─── Event Listeners & Initialization ───
@@ -2225,29 +2386,73 @@
     
 
     // Step-by-step reveal buttons in Math Tutoring Station
+    const explStepCount = () => $$('#tutorStepExpl .ms-step').length;
     $$('.step-reveal-btn').forEach(btn => {
       btn.addEventListener('click', () => {
         const step = btn.dataset.step;
-        const map = {hint: '#tutorStepHint', expl: '#tutorStepExpl', ans: '#tutorStepAns'};
-        const box = $(map[step]);
-        if (!box) return;
-        box.hidden = !box.hidden;
-        btn.classList.toggle('is-open', !box.hidden);
-        if (step === 'ans') setTutorBlanksRevealed(!box.hidden);
-        renderMathIn(box);
+        if (step === 'expl') tutorReveal.expl = tutorReveal.expl > 0 ? 0 : explStepCount();
+        else tutorReveal[step] = !tutorReveal[step];
+        applyTutorReveal();
+        notifyTutorChanged();
       });
+    });
+    $('#tutorNextStepBtn')?.addEventListener('click', () => {
+      tutorReveal.expl = Math.min(explStepCount(), tutorReveal.expl + 1);
+      applyTutorReveal();
+      notifyTutorChanged();
     });
     $('#tutorRevealAllBtn').addEventListener('click', () => {
-      ['#tutorStepHint', '#tutorStepExpl', '#tutorStepAns'].forEach(sel => {
-        const el = $(sel);
-        if (el) {
-          el.hidden = false;
-          renderMathIn(el);
-        }
-      });
-      $$('.step-reveal-btn').forEach(b => b.classList.add('is-open'));
-      setTutorBlanksRevealed(true);
+      tutorReveal = {hint: true, expl: explStepCount(), ans: true};
+      applyTutorReveal();
+      notifyTutorChanged();
     });
+
+    // Whiteboard pages & tools
+    $('#langHelpPracticeBtn')?.addEventListener('click', () => {
+      startCustomPoolSession(langHelpCards().map(x => x.card), '日语没看懂的题', 20);
+    });
+    $('#langHelpList')?.addEventListener('click', e => {
+      const id = e.target.closest('[data-card-id]')?.dataset.cardId;
+      const card = cards.find(c => c.id === id);
+      if (!card) return;
+      if (isMathCard(card)) openMathTutorWithCard(id);
+      else if (!window.EJU_SYNC?.isTeacher?.()) startCustomPoolSession([card], '日语没看懂的题', 1);
+    });
+    $('#wbPageSelect')?.addEventListener('change', e => {
+      if (e.target.value === '__new') newBoardPage();
+      else openBoardPage(e.target.value);
+      notifyTutorChanged();
+    });
+    $('#wbPastePaperBtn')?.addEventListener('click', () => {
+      const card = tutorCardsList[tutorCardIdx];
+      if (card?.paperImg) window.EJU_WHITEBOARD?.addImage(card.paperImg, card.topic);
+    });
+    $('#wbReplayBtn')?.addEventListener('click', () => {
+      const wb = window.EJU_WHITEBOARD;
+      if (!wb) return;
+      if (wb.isReplaying()) wb.stopReplay();
+      else if (!wb.startReplay(1)) alert('这一页还没有笔记');
+    });
+    $('#wbExportBtn')?.addEventListener('click', () => {
+      const url = window.EJU_WHITEBOARD?.exportImage();
+      if (!url) return alert('这一页还没有笔记');
+      const card = tutorCardsList[tutorCardIdx];
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `白板-${(tutorBoardId && state.boardPages?.[tutorBoardId]?.title) || card?.topic || 'page'}-${localDateKey()}.png`;
+      a.click();
+    });
+    const penOnlyBox = $('#wbPenOnlyToggle');
+    if (penOnlyBox) {
+      penOnlyBox.checked = Boolean(window.EJU_WHITEBOARD?.penOnly());
+      penOnlyBox.addEventListener('change', () => window.EJU_WHITEBOARD?.setPenOnly(penOnlyBox.checked));
+    }
+    if (window.EJU_WHITEBOARD?.hooks) {
+      window.EJU_WHITEBOARD.hooks.onReplay = on => {
+        const b = $('#wbReplayBtn');
+        if (b) { b.textContent = on ? '停止回放' : '回放'; b.classList.toggle('is-replaying', on); }
+      };
+    }
 
     // Tutor verdict buttons (linked to progress & 17-day plan)
     $('#tutorMarkHardBtn').addEventListener('click', () => {

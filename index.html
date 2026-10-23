@@ -39,6 +39,7 @@
     <nav class="main-nav" aria-label="主导航">
       <button class="nav-tab is-active" data-route="today" type="button"><span class="nav-full">刷题与速查</span><span class="nav-short">刷题</span></button>
       <button class="nav-tab" data-route="math" type="button"><span class="nav-full">数学讲题台</span><span class="nav-short">讲题</span></button>
+      <button class="nav-tab" data-route="homework" type="button"><span class="nav-full">作业</span><span class="nav-short">作业</span> <span class="nav-badge" id="navHwBadge" hidden>0</span></button>
       <button class="nav-tab" data-route="wrong" type="button"><span class="nav-full">错题本</span><span class="nav-short">错题</span> <span class="nav-badge" id="navWrongBadge">0</span></button>
       <button class="nav-tab" data-route="plan" type="button"><span class="nav-full">17天方案</span><span class="nav-short">方案</span> <span class="nav-badge nav-badge-ok" id="navPlanBadge">0%</span></button>
       <button class="nav-tab" data-route="audit" type="button"><span class="nav-full">阶段1核验报告</span><span class="nav-short">核验</span> <span class="nav-badge nav-badge-ok" id="navAuditBadge">34/34 已核</span></button>
@@ -80,6 +81,15 @@
           <strong class="hero-focus-val hero-val-danger" id="heroWrongVal">0</strong>
           <span class="hero-focus-sub">原题答对1次＋同考点变形题答对1次移出 &rarr;</span>
         </div>
+      </article>
+
+      <!-- 日文优先模式下点过「看不懂」的题（讲课的一方也看得到） -->
+      <article class="card lang-help-card" id="langHelpCard" hidden>
+        <div class="lang-help-head">
+          <h2 class="section-title" id="langHelpTitle">日语没看懂的题</h2>
+          <button class="btn btn-sm" id="langHelpPracticeBtn" type="button">再练这些</button>
+        </div>
+        <ul class="lang-help-list" id="langHelpList"></ul>
       </article>
 
       <!-- 顶部常驻学习进度看板（与方案、错题实时联动） -->
@@ -193,6 +203,12 @@
       </div>
 
       <!-- 讲题台左右分栏：左侧题面（占~42%），右侧手写白板与单元工具（占屏幕一半以上，可全屏） -->
+      <div class="lesson-bar" id="lessonBar" hidden>
+        <span class="lesson-dot"></span>
+        <span class="lesson-text" id="lessonText"></span>
+        <button class="btn btn-sm btn-primary" id="lessonToggleBtn" type="button">开始讲课</button>
+        <button class="btn btn-sm" id="lessonFollowBtn" type="button" hidden>暂停跟随</button>
+      </div>
       <div class="tutor-split">
         <!-- 左侧：题面与分步核对区 -->
         <div class="tutor-left card">
@@ -234,6 +250,7 @@
               <button class="step-reveal-btn" data-step="expl" type="button">步骤</button>
               <button class="step-reveal-btn" data-step="ans" type="button">答案</button>
               <button class="text-btn" id="tutorRevealAllBtn" type="button">全部</button>
+              <button class="btn btn-sm" id="tutorNextStepBtn" type="button">下一步</button>
             </div>
 
             <div class="step-box" id="tutorStepHint" hidden></div>
@@ -491,6 +508,14 @@
                 <button class="wb-btn" data-wb-mode="eraser" type="button" title="橡皮擦 (快捷键 E / 数位板笔侧键)">橡皮 (E)</button>
                 <button class="wb-btn" data-wb-mode="lasso" type="button" title="套索框选与移动 (快捷键 L)">套索 (L)</button>
                 <button class="wb-btn" data-wb-mode="pan" type="button" title="拖动无限画布 (或按住空格)">拖画布</button>
+                <button class="wb-btn" data-wb-mode="laser" type="button" title="激光笔：指给对方看，1 秒后自动消失 (R)">激光笔</button>
+                <button class="wb-btn" data-wb-mode="text" type="button" title="点一下白板写文字 (T)">文字</button>
+              </div>
+
+              <div class="wb-tool-group" role="group" aria-label="作图">
+                <button class="wb-btn" data-wb-mode="line" type="button" title="直线：接近水平/竖直/45° 会自动对齐，按住 Shift 不对齐">直线</button>
+                <button class="wb-btn" data-wb-mode="circle" type="button" title="圆：从圆心拖到圆上">圆</button>
+                <button class="wb-btn" data-wb-mode="axes" type="button" title="坐标轴：从原点向外拖">坐标轴</button>
               </div>
 
               <div class="wb-width-group" role="group" aria-label="笔触粗细">
@@ -514,7 +539,15 @@
                 </select>
                 <button class="wb-btn" id="wbUndoBtn" type="button" title="撤销 (Ctrl+Z)">撤销</button>
                 <button class="wb-btn" id="wbRedoBtn" type="button" title="重做 (Ctrl+Y)">重做</button>
-                <button class="wb-btn" id="wbClearBtn" type="button" title="清空当前题白板">清屏</button>
+                <button class="wb-btn" id="wbClearBtn" type="button" title="清空我这一层">清屏</button>
+              </div>
+
+              <div class="wb-tool-group" role="group" aria-label="白板页与其他">
+                <select id="wbPageSelect" class="select-xs" aria-label="白板页"></select>
+                <button class="wb-btn" id="wbPastePaperBtn" type="button" title="把这道题的原卷页贴到白板上圈画">贴原卷</button>
+                <button class="wb-btn" id="wbReplayBtn" type="button" title="按书写顺序重放这一页">回放</button>
+                <button class="wb-btn" id="wbExportBtn" type="button" title="把这一页（两人的笔记）存成图片">存图片</button>
+                <label class="wb-check" title="手指和手掌碰屏幕只会拖动画布，只有笔能写"><input type="checkbox" id="wbPenOnlyToggle"> 防误触</label>
               </div>
 
               <span class="wb-stylus-badge" title="友基M708 压感驱动就绪">友基M708 压感/侧键已就绪</span>
@@ -523,6 +556,7 @@
             <!-- 学习小组：同伴在线状态、跟随讲题、笔记图层 -->
             <div class="group-board-bar" id="groupBoardBar" hidden>
               <span class="group-presence" id="groupPresence"></span>
+              <button class="wb-btn" id="wbLookHereBtn" type="button" title="把对方的画面拉到我现在看的位置">请看这里</button>
               <label class="group-follow"><input type="checkbox" id="groupFollowToggle"> 跟随讲题（对方翻题、移动画布时我跟着走）</label>
               <span class="group-legend">黄色描边 = 对方的笔记</span>
               <span class="group-layers" role="group" aria-label="笔记图层">
@@ -534,7 +568,7 @@
             <div class="wb-canvas-wrap" id="wbCanvasWrap">
               <canvas id="wbCanvas" width="820" height="560"></canvas>
             </div>
-            <div class="wb-bottom-hint">快捷键：<code>P</code> 笔 · <code>M</code> 荧光笔 · <code>E</code>/笔侧键 橡皮 · <code>L</code> 套索 · <code>[ ]</code> 粗细 · 按住<code>空格</code>拖画布 · <code>Ctrl+Z/Y</code> 撤销重做</div>
+            <div class="wb-bottom-hint">快捷键：<code>P</code> 笔 · <code>M</code> 荧光笔 · <code>E</code>/笔侧键 橡皮 · <code>L</code> 套索 · <code>R</code> 激光笔 · <code>T</code> 文字 · <code>[ ]</code> 粗细 · 按住<code>空格</code>拖画布 · <code>Ctrl+Z/Y</code> 撤销重做</div>
           </div>
         </div>
       </div>
@@ -649,6 +683,10 @@
     <!-- ═══════════════════════════════════════════════════════════════════
          视图 4：错题本（独立页面、原题 1 次 ＋ 同考点变式 1 次移出、支持一键重刷）
          ═══════════════════════════════════════════════════════════════════ -->
+    <section class="view" id="view-homework">
+      <div id="hwRoot"></div>
+    </section>
+
     <section class="view" id="view-wrong">
       <article class="card">
         <div class="section-head">
@@ -865,12 +903,16 @@
       <div class="modal-body">
         <!-- Not in a group yet -->
         <div id="groupSetupPane">
-          <p class="section-sub">小组成员共用一份刷题进度、错题本与待讲题单；数学白板各自一层，互相实时可见。</p>
+          <p class="section-sub">学习的一方：刷题进度、错题本都是你的。讲课的一方：看得到对方进度，带着对方讲题。白板各自一层，实时可见。</p>
           <label class="group-field"><span>你的昵称</span><input type="text" id="groupMemberName" maxlength="24" placeholder="例如：nayuki"></label>
           <div class="group-choice">
             <div class="group-choice-col">
               <h4>创建新小组</h4>
               <input type="text" id="groupNameInput" maxlength="24" placeholder="小组名，例如：冲刺小队">
+              <select id="groupRoleSelect" class="select-xs" aria-label="我的身份">
+                <option value="student">我是学习的一方</option>
+                <option value="teacher">我是讲课的一方</option>
+              </select>
               <button class="btn btn-primary" id="groupCreateBtn" type="button">创建并生成邀请链接</button>
             </div>
             <div class="group-choice-col">
@@ -879,15 +921,21 @@
               <button class="btn" id="groupJoinBtn" type="button">加入</button>
             </div>
           </div>
-          <p class="group-note">加入后，这台设备上已有的刷题进度会合并进小组的共同进度。</p>
+          <p class="group-note">身份由邀请链接决定：用「邀请讲课的一方」链接加入就是讲课身份。学习的一方加入后，本机已有的进度会合并进去。</p>
         </div>
 
         <!-- In a group -->
         <div id="groupInfoPane" hidden>
-          <p class="group-title"><strong id="groupNameText"></strong> · 我是 <strong id="groupMeText"></strong></p>
+          <p class="group-title"><strong id="groupNameText"></strong> · 我是 <strong id="groupMeText"></strong>（<span id="groupRoleText"></span>）
+            <button class="text-btn" id="groupSwitchRoleBtn" type="button">切换身份</button></p>
           <ul class="group-members" id="groupMembersList"></ul>
           <div class="group-link-row">
-            <span>邀请对方加入</span>
+            <span>邀请讲课的一方</span>
+            <input type="text" id="groupTeacherInviteLink" readonly>
+            <button class="btn btn-sm" id="groupCopyTeacherInviteBtn" type="button">复制</button>
+          </div>
+          <div class="group-link-row">
+            <span>邀请学习的一方</span>
             <input type="text" id="groupInviteLink" readonly>
             <button class="btn btn-sm" id="groupCopyInviteBtn" type="button">复制</button>
           </div>
@@ -926,6 +974,7 @@
     <script src="./whiteboard.js"></script>
   <script src="./math_tools.js"></script>
   <script src="./app.js"></script>
+  <script src="./homework.js"></script>
   <script src="./sync.js"></script>
   <script type="module" src="./ai_verify.js"></script>
 </body>

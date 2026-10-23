@@ -13,6 +13,9 @@ WorkingDirectory=/opt/eju-sprint
 Environment=EJU_SYNC_DB=/var/lib/eju-sync/eju_sync.db
 Environment=EJU_SYNC_HOST=127.0.0.1
 Environment=EJU_SYNC_PORT=8787
+# Token a chat bot (ATRI) sends as X-Bot-Token to read homework notices; keep it in a root-only file:
+#   EnvironmentFile=/etc/eju-sync.env   containing   EJU_BOT_TOKEN=<random>
+EnvironmentFile=-/etc/eju-sync.env
 StateDirectory=eju-sync
 ExecStart=/usr/bin/python3 /opt/eju-sprint/server/eju_sync_server.py
 Restart=always
