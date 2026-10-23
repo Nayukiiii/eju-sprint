@@ -1,4 +1,4 @@
-const CACHE = 'eju-sprint-stage3-v12';
+const CACHE = 'eju-sprint-stage3-v13';
 const ASSETS = [
   './',
   './index.html',
