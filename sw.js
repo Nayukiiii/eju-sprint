@@ -1,4 +1,4 @@
-const CACHE = 'eju-sprint-stage3-v15';
+const CACHE = 'eju-sprint-stage3-v16';
 const ASSETS = [
   './',
   './index.html',
@@ -18,6 +18,7 @@ const ASSETS = [
   './app.js',
   './math_types.js',
   './homework.js',
+  './mock.js',
   './sync.js',
   './ai_verify.js',
   './vendor/anthropic-sdk.js',

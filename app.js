@@ -1450,7 +1450,9 @@
     for (const m of (state.mocks || []).slice().reverse().slice(0, 8)) {
       const row = document.createElement('div');
       row.className = 'mock-row';
-      row.innerHTML = `<span><b>${m.subject}</b> · ${m.score} 分</span><span class="stat-hint">${m.note || ''} (${m.date})</span>`;
+      row.innerHTML = m.real
+        ? `<span><b>${m.subject}</b> · 正确 ${m.correct}/${m.total} 空</span><span class="stat-hint">${m.note || ''} (${m.date})</span>`
+        : `<span><b>${m.subject}</b> · ${m.score} 分</span><span class="stat-hint">${m.note || ''} (${m.date})</span>`;
       box.appendChild(row);
     }
   }
@@ -1999,6 +2001,8 @@
       renderLinkedPlan();
     } else if (route === 'homework') {
       window.EJU_HW?.render();
+    } else if (route === 'mock') {
+      window.EJU_MOCK?.render();
     } else if (route === 'audit') {
       renderStage1AuditView();
       renderMathIn($('#view-audit'));
@@ -2101,6 +2105,11 @@
   // ─── Bridge for sync.js (study-group sync): read state, apply remote changes, refresh views ───
   window.EJU_APP = {
     getState: () => state,
+    saveState,
+    recordCardGrade,
+    switchRoute,
+    renderMath: renderMathIn,
+    today: () => localDateKey(),
     // Apply a remote change without re-announcing it as a local edit
     applyRemote(mutate) {
       mutate(state);
