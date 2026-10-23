@@ -7,6 +7,8 @@
 用法：
   python tools/ocr_bunso.py "D:/日语+文数+文综" --match 文综 --out ocr_out
   python tools/ocr_bunso.py "D:/日语+文数+文综" --match 文综 --out ocr_out --llm      # 再用 DeepSeek 把文字拆成题目 JSON
+  # 同时处理答案 PDF（按「年份+第N回」配对，如 2005平成17年第1回文综.pdf ↔ 2005平成17年第1回答案.pdf）：
+  python tools/ocr_bunso.py "D:/.../【1】文综真题" --answers "D:/.../【2】文综答案" --out ocr_out --llm
 
 步骤：
   1. 每页先取 PDF 自带的文字；没有文字层（扫描件）就渲染成图片，用 Tesseract 日文 OCR。
@@ -107,6 +109,32 @@ def llm_structure(text):
     return items
 
 
+def pair_key(name):
+    """'2005平成17年第1回文综.pdf' -> '2005-1'；只有一回的年份（2024/2025）-> '2024-1'。"""
+    y = re.match(r'\D*(\d{4})', name)
+    n = re.search(r'第\s*([12１２一二])\s*回', name)
+    if not y:
+        return None
+    return f'{y.group(1)}-{ {"1": "1", "１": "1", "一": "1", "2": "2", "２": "2", "二": "2"}.get(n.group(1), "1") if n else "1" }'
+
+
+ANS_PROMPT = """下面是 EJU 総合科目某一回的「正解表」OCR 文字。只输出 JSON 对象：键是题号（字符串），值是正确选项编号（1-4 的整数）。
+表里有科目分区时，题号按卷面题号（解答番号）对应，不要自己重新编号。看不清或缺失的题号不要写，更不要猜。"""
+
+
+def llm_answers(text):
+    import requests
+    key = os.environ.get('DEEPSEEK_API_KEY')
+    base = os.environ.get('DEEPSEEK_BASE', 'https://api.deepseek.com').rstrip('/')
+    model = os.environ.get('DEEPSEEK_MODEL', 'deepseek-chat')
+    r = requests.post(f'{base}/chat/completions', timeout=180, headers={'Authorization': f'Bearer {key}'},
+                      json={'model': model, 'temperature': 0, 'messages': [
+                          {'role': 'system', 'content': ANS_PROMPT}, {'role': 'user', 'content': text[:12000]}]})
+    r.raise_for_status()
+    m = re.search(r'\{.*\}', r.json()['choices'][0]['message']['content'], re.S)
+    return json.loads(m.group(0)) if m else {}
+
+
 def write_report(out_dir, name, items):
     seen, dup = set(), []
     for it in items:
@@ -128,6 +156,7 @@ def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument('folder')
     ap.add_argument('--match', default='文综', help='只处理文件名含这个词的 PDF（默认：文综）')
+    ap.add_argument('--answers', help='答案 PDF 所在文件夹（按年份+第N回配对）')
     ap.add_argument('--out', default='ocr_out')
     ap.add_argument('--lang', default='jpn')
     ap.add_argument('--dpi', type=int, default=200)
@@ -137,6 +166,10 @@ def main():
     pdfs = sorted(p for p in Path(args.folder).rglob('*.pdf') if args.match in p.name)
     if not pdfs:
         sys.exit(f'{args.folder} 里没有文件名含「{args.match}」的 PDF')
+    ans_pdfs = {}
+    if args.answers:
+        for p in Path(args.answers).rglob('*.pdf'):
+            ans_pdfs[pair_key(p.name)] = p
     for pdf in pdfs:
         out_dir = Path(args.out) / pdf.stem
         print(f'→ {pdf.name}')
@@ -144,7 +177,22 @@ def main():
         print(f'   {n} 页，其中 {scanned} 页走了 OCR')
         if args.llm:
             items = llm_structure((out_dir / 'text.txt').read_text(encoding='utf-8'))
+            ans = {}
+            ap_ = ans_pdfs.get(pair_key(pdf.name))
+            if args.answers and not ap_:
+                print('   没找到配对的答案 PDF')
+            if ap_:
+                a_dir = Path(args.out) / (pdf.stem + '_答案')
+                extract_pdf(ap_, a_dir, args.lang, args.dpi)
+                ans = llm_answers((a_dir / 'text.txt').read_text(encoding='utf-8'))
+                (out_dir / 'answers.json').write_text(json.dumps(ans, ensure_ascii=False, indent=2), encoding='utf-8')
+                print(f'   答案表读出 {len(ans)} 个，来自 {ap_.name}')
             for it in items:
+                official = ans.get(str(it.get('no')))
+                if official is not None:
+                    it['aFromQuestion'] = it.get('a')
+                    it['a'] = int(official) - 1
+                    it['aSource'] = '正解表'
                 it['source'] = f'{pdf.stem} 第{it.get("no")}問'
                 it['status'] = '待核对'
             (out_dir / 'draft.json').write_text(json.dumps(items, ensure_ascii=False, indent=2), encoding='utf-8')
