@@ -1,18 +1,26 @@
-// AI 交叉核验（文综）：用 Claude 盲答每道総合科目题，与题库答案比对，结果只保存在本浏览器。
-// The API key and all results live in this browser's localStorage; nothing is sent to our server.
+// AI 交叉核验（文综）：用大模型盲答每道総合科目题，与题库答案比对。
+// 支持 DeepSeek / OpenAI 兼容接口（接口地址、模型名都可以自己填）和 Anthropic。
+// API Key 和全部结果只保存在本浏览器；选「经本站中转」时 Key 只是经过你自己的服务器转发，不保存、不写日志。
 import { Anthropic, jsonSchemaOutputFormat } from './vendor/anthropic-sdk.js';
 
-const KEY_STORAGE = 'eju-ai-key';
-const MODEL_STORAGE = 'eju-ai-model';
+const KEY_PREFIX = 'eju-ai-key';         // + '-' + provider
+const CFG_STORAGE = 'eju-ai-cfg';
 const RESULT_STORAGE = 'eju-ai-verify-v1';
+const DECISION_STORAGE = 'eju-ai-decisions-v1';
 const CONCURRENCY = 3;
 
-// Per-1M-token prices, used only for the running cost estimate shown in the panel
-const MODELS = {
-  'claude-opus-5-5': {label: 'Claude Opus 5.5（推荐，最准）', input: 4, output: 20, fallbacks: true},
-  'claude-sonnet-5-5': {label: 'Claude Sonnet 5.5（约一半价格）', input: 2, output: 10, fallbacks: true},
-  'claude-haiku-5-5': {label: 'Claude Haiku 5.5（最便宜，准确度较低）', input: 0.1, output: 0.5, fallbacks: false},
+const PROVIDERS = {
+  deepseek: {label: 'DeepSeek', base: 'https://api.deepseek.com', model: 'deepseek-chat', style: 'openai', keyHint: 'sk-…'},
+  openai: {label: 'OpenAI 兼容（通义、Kimi、中转站等）', base: 'https://api.openai.com/v1', model: 'gpt-4o', style: 'openai', keyHint: 'sk-…'},
+  anthropic: {label: 'Anthropic Claude', base: 'https://api.anthropic.com', model: 'claude-opus-5-5', style: 'anthropic', keyHint: 'sk-ant-…'},
 };
+
+// OpenAI-style endpoints have no schema-enforced output, so the shape is spelled out in the prompt
+const JSON_SHAPE_NOTE = `
+
+Reply with ONE JSON object and nothing else, in exactly this shape:
+{"options":[{"number":1,"statement_true":true,"reason":"…"},{"number":2,…},{"number":3,…},{"number":4,…}],"answer":1,"confidence":"high|medium|low","ambiguous":false,"ambiguity_note":"","outdated_risk":false,"outdated_note":"","summary":"…"}
+"answer" and every "number" are 1–4. Always include all four options. Leave a note empty ("") when it does not apply.`;
 
 const SYSTEM_PROMPT = `You are checking practice questions for the EJU 総合科目 exam (the Japanese university entrance exam for international students; social studies: politics, economics, geography, history and current affairs).
 
@@ -84,6 +92,20 @@ function writeText(key, value) {
 }
 
 let results = readJson(RESULT_STORAGE, {});
+let decisions = readJson(DECISION_STORAGE, {});
+
+function loadCfg() {
+  const saved = readJson(CFG_STORAGE, {});
+  const provider = PROVIDERS[saved.provider] ? saved.provider : 'deepseek';
+  const def = PROVIDERS[provider];
+  return {provider, base: saved.base || def.base, model: saved.model || def.model, via: saved.via === 'relay' ? 'relay' : 'direct'};
+}
+
+function saveCfg(cfg) {
+  writeJson(CFG_STORAGE, cfg);
+}
+
+const keyFor = provider => readText(`${KEY_PREFIX}-${provider}`) || (provider === 'anthropic' ? readText(KEY_PREFIX) : '');
 
 // A result belongs to one exact version of the question; edits to the stem, options or key make it stale
 function cardFingerprint(card) {
@@ -114,65 +136,171 @@ function judge(card, out) {
 }
 
 // ─── One blind check ───
-async function verifyCard(client, model, card) {
-  const question = [
-    `問題：${card.q}`,
-    ...card.choices.map((ch, i) => `${i + 1}. ${ch}`),
-  ].join('\n');
+class ApiFailure extends Error {
+  constructor(status, message) {
+    super(message);
+    this.status = status;
+  }
+}
 
+function questionText(card) {
+  return [`問題：${card.q}`, ...card.choices.map((ch, i) => `${i + 1}. ${ch}`)].join('\n');
+}
+
+// Accept what a model returns even when it is slightly off-shape; reject what cannot be judged
+function normalizeOut(raw) {
+  const out = raw && typeof raw === 'object' ? raw : null;
+  if (!out) return null;
+  const answer = Number(out.answer);
+  if (![1, 2, 3, 4].includes(answer)) return null;
+  const options = Array.isArray(out.options) ? out.options.map(o => ({
+    number: Number(o.number),
+    statement_true: o.statement_true === true || o.statement_true === 'true',
+    reason: String(o.reason || ''),
+  })).filter(o => [1, 2, 3, 4].includes(o.number)) : [];
+  return {
+    options,
+    answer,
+    confidence: ['high', 'medium', 'low'].includes(out.confidence) ? out.confidence : 'medium',
+    ambiguous: out.ambiguous === true,
+    ambiguity_note: String(out.ambiguity_note || ''),
+    outdated_risk: out.outdated_risk === true,
+    outdated_note: String(out.outdated_note || ''),
+    summary: String(out.summary || ''),
+  };
+}
+
+function extractJson(text) {
+  const t = String(text || '').trim();
+  try { return JSON.parse(t); } catch (_) {}
+  const fenced = t.match(/```(?:json)?\s*([\s\S]*?)```/);
+  if (fenced) { try { return JSON.parse(fenced[1]); } catch (_) {} }
+  const a = t.indexOf('{');
+  const b = t.lastIndexOf('}');
+  if (a >= 0 && b > a) { try { return JSON.parse(t.slice(a, b + 1)); } catch (_) {} }
+  return null;
+}
+
+function groupToken() {
+  try { return JSON.parse(localStorage.getItem('eju-group-token') || 'null'); } catch (_) { return null; }
+}
+
+// One HTTPS call to an OpenAI-style endpoint, directly or through our own server
+async function openAiRequest(cfg, apiKey, body) {
+  const url = `${cfg.base.replace(/\/+$/, '')}/chat/completions`;
+  let res;
+  try {
+    if (cfg.via === 'relay') {
+      const token = groupToken();
+      if (!token) throw new ApiFailure(0, '「经本站中转」需要先加入小组（登录后才能用中转）。');
+      res = await fetch('/api/v2/relay', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json', Authorization: `Bearer ${token}`},
+        body: JSON.stringify({url, headers: {Authorization: `Bearer ${apiKey}`}, body}),
+      });
+    } else {
+      res = await fetch(url, {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json', Authorization: `Bearer ${apiKey}`},
+        body: JSON.stringify(body),
+      });
+    }
+  } catch (err) {
+    if (err instanceof ApiFailure) throw err;
+    // fetch rejects with a bare TypeError for both "offline" and "blocked by CORS"
+    throw new ApiFailure(0, `连不上 ${cfg.base}。如果网络正常，多半是该接口不允许浏览器直接访问（跨域限制），请把「连接方式」改成「经本站中转」。`);
+  }
+  let data = {};
+  try { data = await res.json(); } catch (_) {}
+  if (!res.ok) throw new ApiFailure(res.status, data.error?.message || data.error || `HTTP ${res.status}`);
+  return data;
+}
+
+async function verifyCardOpenAi(cfg, apiKey, card) {
+  const data = await openAiRequest(cfg, apiKey, {
+    model: cfg.model,
+    temperature: 0,
+    max_tokens: 4000,
+    response_format: {type: 'json_object'},
+    messages: [
+      {role: 'system', content: SYSTEM_PROMPT + JSON_SHAPE_NOTE},
+      {role: 'user', content: questionText(card)},
+    ],
+  });
+  const choice = data.choices?.[0];
+  const usage = {input: data.usage?.prompt_tokens || 0, output: data.usage?.completion_tokens || 0};
+  if (choice?.finish_reason === 'length') return {verdict: 'error', error: '输出被截断', usage};
+  const out = normalizeOut(extractJson(choice?.message?.content));
+  if (!out) return {verdict: 'error', error: '模型没有返回可解析的 JSON', usage};
+  return {verdict: judge(card, out), out, usage, servedBy: data.model};
+}
+
+async function verifyCardAnthropic(cfg, apiKey, card) {
+  const client = new Anthropic({apiKey, dangerouslyAllowBrowser: true, maxRetries: 3,
+    ...(cfg.base !== PROVIDERS.anthropic.base ? {baseURL: cfg.base} : {})});
+  const fallbacks = /^claude-(opus|sonnet)/.test(cfg.model);
   const params = {
-    model,
+    model: cfg.model,
     max_tokens: 16000,
     system: SYSTEM_PROMPT,
     output_config: {effort: 'medium', format: jsonSchemaOutputFormat(RESULT_SCHEMA)},
-    messages: [{role: 'user', content: question}],
+    messages: [{role: 'user', content: questionText(card)}],
   };
-  // Server-side fallback on a safety decline (not offered for Haiku)
-  const response = MODELS[model].fallbacks
-    ? await client.beta.messages.parse({...params, betas: ['server-side-fallback-2026-07-01'], fallbacks: 'default'})
-    : await client.messages.parse(params);
-
+  let response;
+  try {
+    response = fallbacks
+      ? await client.beta.messages.parse({...params, betas: ['server-side-fallback-2026-07-01'], fallbacks: 'default'})
+      : await client.messages.parse(params);
+  } catch (err) {
+    if (err instanceof Anthropic.APIConnectionError) throw new ApiFailure(0, `连不上 ${cfg.base}。请检查网络。`);
+    if (err instanceof Anthropic.APIError) throw new ApiFailure(err.status || 0, err.message);
+    throw err;
+  }
   const usage = {input: response.usage?.input_tokens || 0, output: response.usage?.output_tokens || 0};
-  if (response.stop_reason === 'refusal') {
-    return {verdict: 'error', error: '模型拒绝回答此题', usage};
-  }
-  if (response.stop_reason === 'max_tokens' || !response.parsed_output) {
-    return {verdict: 'error', error: '输出被截断或无法解析', usage};
-  }
-  const out = response.parsed_output;
-  return {verdict: judge(card, out), out, usage, servedBy: response.model};
+  if (response.stop_reason === 'refusal') return {verdict: 'error', error: '模型拒绝回答此题', usage};
+  if (response.stop_reason === 'max_tokens' || !response.parsed_output) return {verdict: 'error', error: '输出被截断或无法解析', usage};
+  return {verdict: judge(card, response.parsed_output), out: response.parsed_output, usage, servedBy: response.model};
 }
+
+const verifyCard = (cfg, apiKey, card) =>
+  PROVIDERS[cfg.provider].style === 'anthropic' ? verifyCardAnthropic(cfg, apiKey, card) : verifyCardOpenAi(cfg, apiKey, card);
 
 // ─── Run state ───
 let running = false;
 let stopRequested = false;
 let session = {done: 0, total: 0, input: 0, output: 0};
 
-function costOf(model, input, output) {
-  const m = MODELS[model];
-  return (input * m.input + output * m.output) / 1e6;
+// Only the Claude price list is known; for other providers the panel shows tokens, not dollars
+const CLAUDE_PRICES = {opus: [4, 20], sonnet: [2, 10], haiku: [0.1, 0.5]};
+function costText(cfg, input, output) {
+  const tier = Object.keys(CLAUDE_PRICES).find(t => cfg.model.includes(t));
+  if (cfg.provider === 'anthropic' && tier) {
+    const [pi, po] = CLAUDE_PRICES[tier];
+    return `约 $${((input * pi + output * po) / 1e6).toFixed(2)}`;
+  }
+  return '费用以服务商账单为准';
 }
 
 async function runVerification(scope) {
-  const apiKey = readText(KEY_STORAGE);
-  const model = readText(MODEL_STORAGE) || 'claude-opus-5-5';
+  const cfg = loadCfg();
+  const apiKey = keyFor(cfg.provider);
   if (!apiKey) {
-    setStatus('请先填写并保存 API Key。', 'warn');
+    setStatus(`请先填写并保存 ${PROVIDERS[cfg.provider].label} 的 API Key。`, 'warn');
     return;
   }
-  const all = bunsoCards();
-  const queue = all.filter(card => {
+  const deck = $('#aiDeckSelect')?.value || '';
+  const queue = bunsoCards().filter(card => {
+    if (deck && card.deck !== deck) return false;
     const r = resultFor(card);
     if (scope === 'all') return true;
     if (scope === 'flagged') return r && r.verdict !== 'agree';
     return !r || r.verdict === 'stale' || r.verdict === 'error';
   });
   if (!queue.length) {
-    setStatus(scope === 'flagged' ? '没有需要复核的题目。' : '全部题目都已核验过。如需重跑请选「全部重新核验」。', 'ok');
+    setStatus(scope === 'flagged' ? '没有需要复核的题目。' : '这个范围的题目都已核验过。如需重跑请选「全部重新核验」。', 'ok');
     return;
   }
 
-  const client = new Anthropic({apiKey, dangerouslyAllowBrowser: true, maxRetries: 3});
   running = true;
   stopRequested = false;
   session = {done: 0, total: queue.length, input: 0, output: 0};
@@ -185,31 +313,24 @@ async function runVerification(scope) {
       const card = queue.shift();
       let r;
       try {
-        r = await verifyCard(client, model, card);
+        r = await verifyCard(cfg, apiKey, card);
       } catch (err) {
-        if (err instanceof Anthropic.AuthenticationError) {
-          fatal = 'API Key 无效或已被撤销（401）。请检查后重新保存。';
-        } else if (err instanceof Anthropic.PermissionDeniedError) {
-          fatal = '这个 API Key 没有调用该模型的权限（403）。';
-        } else if (err instanceof Anthropic.NotFoundError) {
-          fatal = `找不到模型 ${model}（404）。`;
-        } else if (err instanceof Anthropic.RateLimitError) {
-          r = {verdict: 'error', error: '请求过于频繁（429），稍后可用「只核验未完成的」继续'};
-        } else if (err instanceof Anthropic.APIConnectionError) {
-          fatal = '连不上 api.anthropic.com。请检查网络，或服务器的 Content-Security-Policy 是否允许该域名。';
-        } else if (err instanceof Anthropic.APIError) {
-          r = {verdict: 'error', error: `API 错误 ${err.status || ''}：${err.message}`};
-        } else {
-          r = {verdict: 'error', error: String(err && err.message || err)};
-        }
+        const status = err.status;
+        if (status === 401) fatal = 'API Key 无效或已被撤销（401）。请检查后重新保存。';
+        else if (status === 402) fatal = '账户余额不足（402）。';
+        else if (status === 403) fatal = '这个 Key 没有权限调用该模型，或被服务商拒绝（403）。';
+        else if (status === 404) fatal = `找不到模型或接口（404）：${cfg.model} @ ${cfg.base}`;
+        else if (status === 0) fatal = err.message;
+        else if (status === 429) r = {verdict: 'error', error: '请求过于频繁（429），稍后可用「核验未完成的题」继续'};
+        else r = {verdict: 'error', error: `API 错误 ${status || ''}：${err.message}`};
       }
       if (!r) continue;
-      results[card.id] = {...r, fingerprint: cardFingerprint(card), model, at: new Date().toISOString()};
+      results[card.id] = {...r, fingerprint: cardFingerprint(card), model: `${cfg.provider}/${cfg.model}`, at: new Date().toISOString()};
       writeJson(RESULT_STORAGE, results);
       session.done++;
       session.input += r.usage?.input || 0;
       session.output += r.usage?.output || 0;
-      setStatus(`正在核验 ${session.done} / ${session.total} … 本次约 $${costOf(model, session.input, session.output).toFixed(2)}`);
+      setStatus(`正在核验 ${session.done} / ${session.total} … ${costText(cfg, session.input, session.output)}`);
       renderReport();
     }
   };
@@ -217,11 +338,29 @@ async function runVerification(scope) {
 
   running = false;
   syncButtons();
-  const spent = `本次用量：输入 ${session.input.toLocaleString()} / 输出 ${session.output.toLocaleString()} tokens，约 $${costOf(model, session.input, session.output).toFixed(2)}`;
+  const spent = `用量：输入 ${session.input.toLocaleString()} / 输出 ${session.output.toLocaleString()} tokens，${costText(cfg, session.input, session.output)}`;
   if (fatal) setStatus(`已停止：${fatal}`, 'bad');
   else if (stopRequested) setStatus(`已暂停（完成 ${session.done} / ${session.total}）。${spent}`, 'warn');
   else setStatus(`核验完成 ${session.done} 题。${spent}`, 'ok');
   window.dispatchEvent(new CustomEvent('eju-ai-verify-updated'));
+}
+
+// 「测试连接」：发一个很小的请求，告诉用户地址、Key、模型、跨域是否都通
+async function testConnection() {
+  const cfg = loadCfg();
+  const apiKey = keyFor(cfg.provider);
+  if (!apiKey) return setStatus('先保存 API Key 再测试。', 'warn');
+  setStatus('测试中…');
+  const t0 = performance.now();
+  try {
+    const sample = bunsoCards()[0];
+    const r = await verifyCard(cfg, apiKey, sample);
+    const ms = Math.round(performance.now() - t0);
+    if (r.verdict === 'error') setStatus(`能连上（${ms} ms），但这次返回的内容有问题：${r.error}。可以再试一次，或换一个模型。`, 'warn');
+    else setStatus(`连接正常：${PROVIDERS[cfg.provider].label} · ${cfg.model} · ${cfg.via === 'relay' ? '经本站中转' : '直连'} · ${ms} ms`, 'ok');
+  } catch (err) {
+    setStatus(`连接失败${err.status ? `（${err.status}）` : ''}：${err.message}`, 'bad');
+  }
 }
 
 // ─── UI ───
@@ -240,7 +379,7 @@ function setStatus(text, tone = '') {
 }
 
 function syncButtons() {
-  for (const id of ['aiRunPendingBtn', 'aiRunFlaggedBtn', 'aiRunAllBtn', 'aiClearBtn', 'aiSaveKeyBtn']) {
+  for (const id of ['aiRunPendingBtn', 'aiRunFlaggedBtn', 'aiRunAllBtn', 'aiClearBtn', 'aiSaveKeyBtn', 'aiTestBtn']) {
     const b = document.getElementById(id);
     if (b) b.disabled = running;
   }
@@ -257,6 +396,19 @@ function counts() {
   return c;
 }
 
+const DECISION_LABEL = {adopt: '已采纳 AI', keep: '已保留题库答案', delete: '已标记删除'};
+
+function decisionBar(card, r) {
+  if (r.verdict !== 'disagree' && r.verdict !== 'doubt') return '';
+  const cur = decisions[card.id]?.action;
+  const btn = (action, text) => `<button type="button" class="btn btn-sm${cur === action ? ' is-picked' : ''}" data-ai-decide="${action}" data-card="${escapeHtml(card.id)}">${text}</button>`;
+  const aiAnswer = r.out ? `（AI 认为是 (${r.out.answer})）` : '';
+  return `<div class="ai-decide">
+    ${r.verdict === 'disagree' ? btn('adopt', `采纳 AI${aiAnswer}`) : ''}${btn('keep', '保留题库答案')}${btn('delete', '标记删除')}
+    <span class="ai-hint">这里只是记下你的决定，点「导出修订清单」发给我，我再改进题库。</span>
+  </div>`;
+}
+
 function renderReport() {
   const list = $('#aiVerifyList');
   const summary = $('#aiVerifySummary');
@@ -269,7 +421,8 @@ function renderReport() {
     <span class="ai-pill is-disagree">不一致 ${c.disagree}</span>
     <span class="ai-pill">出错 ${c.error}</span>
     <span class="ai-pill">题目已修改 ${c.stale}</span>
-    <span class="ai-pill">未核验 ${c.none} / ${total}</span>`;
+    <span class="ai-pill">未核验 ${c.none} / ${total}</span>
+    <span class="ai-pill">已处理 ${Object.keys(decisions).length}</span>`;
 
   const rows = bunsoCards()
     .map(card => ({card, r: resultFor(card)}))
@@ -306,11 +459,13 @@ function renderReport() {
       <details class="ai-row is-${r.verdict}">
         <summary>
           <span class="ai-verdict">${VERDICT_LABEL[r.verdict]}</span>
+          ${decisions[card.id] ? `<span class="ai-decided">${DECISION_LABEL[decisions[card.id].action]}</span>` : ''}
           <code>${escapeHtml(card.id)}</code>
           <span class="ai-q">${escapeHtml(card.q)}</span>
           ${out ? `<span class="ai-conf">把握：${{high: '高', medium: '中', low: '低'}[out.confidence]}</span>` : ''}
         </summary>
         <div class="ai-body">
+          ${decisionBar(card, r)}
           ${out?.summary ? `<p class="ai-summary">${escapeHtml(out.summary)}</p>` : ''}
           ${notes}
           <ol class="ai-opts">${options}</ol>
@@ -329,33 +484,88 @@ function exportResults() {
   setTimeout(() => URL.revokeObjectURL(a.href), 1000);
 }
 
+function exportRevisions() {
+  const items = Object.entries(decisions).map(([id, d]) => {
+    const card = (window.EJU_BANK || []).find(c => c.id === id);
+    const r = results[id];
+    return {
+      id, action: d.action, decidedAt: d.at,
+      question: card?.q, bankAnswer: card ? `(${card.a + 1}) ${card.choices[card.a]}` : null,
+      aiAnswer: r?.out ? `(${r.out.answer}) ${card?.choices?.[r.out.answer - 1] || ''}` : null,
+      aiSummary: r?.out?.summary || null,
+    };
+  });
+  if (!items.length) return setStatus('还没有处理过的题。在「不一致 / 存疑」的题里选「采纳 AI / 保留 / 标记删除」。', 'warn');
+  const blob = new Blob([JSON.stringify({exportedAt: new Date().toISOString(), revisions: items}, null, 2)], {type: 'application/json'});
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = `eju-revisions-${new Date().toISOString().slice(0, 10)}.json`;
+  a.click();
+  setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+}
+
 function init() {
   const panel = $('#aiVerifyPanel');
   if (!panel) return;
 
-  const modelSel = $('#aiModelSelect');
-  modelSel.innerHTML = Object.entries(MODELS).map(([id, m]) => `<option value="${id}">${m.label}</option>`).join('');
-  modelSel.value = readText(MODEL_STORAGE) || 'claude-opus-5-5';
-  modelSel.addEventListener('change', () => writeText(MODEL_STORAGE, modelSel.value));
+  const cfg = loadCfg();
+  const providerSel = $('#aiProviderSelect');
+  providerSel.innerHTML = Object.entries(PROVIDERS).map(([id, p]) => `<option value="${id}">${p.label}</option>`).join('');
+  const baseInput = $('#aiBaseInput');
+  const modelInput = $('#aiModelInput');
+  const viaSel = $('#aiViaSelect');
+  const fill = c => {
+    providerSel.value = c.provider;
+    baseInput.value = c.base;
+    modelInput.value = c.model;
+    viaSel.value = c.via;
+    $('#aiKeyInput').placeholder = PROVIDERS[c.provider].keyHint;
+    showKeyState();
+  };
+  const current = () => ({provider: providerSel.value, base: baseInput.value.trim(), model: modelInput.value.trim(), via: viaSel.value});
+  const persist = () => saveCfg(current());
+  providerSel.addEventListener('change', () => {
+    // Switching provider loads that provider's defaults (the key is kept per provider)
+    const def = PROVIDERS[providerSel.value];
+    fill({provider: providerSel.value, base: def.base, model: def.model, via: viaSel.value});
+    persist();
+  });
+  for (const el of [baseInput, modelInput, viaSel]) el.addEventListener('change', persist);
+
+  const decks = [...new Set(bunsoCards().map(c => c.deck))];
+  $('#aiDeckSelect').innerHTML = '<option value="">全部科目</option>' + decks.map(d => `<option>${escapeHtml(d)}</option>`).join('');
 
   const keyInput = $('#aiKeyInput');
-  const showKeyState = () => {
-    const k = readText(KEY_STORAGE);
+  function showKeyState() {
+    const k = keyFor(providerSel.value);
     $('#aiKeyState').textContent = k ? `已保存（…${k.slice(-4)}）` : '未保存';
-  };
-  showKeyState();
+  }
+  fill(cfg);
   $('#aiSaveKeyBtn').addEventListener('click', () => {
     const v = keyInput.value.trim();
     if (!v) return;
-    writeText(KEY_STORAGE, v);
+    writeText(`${KEY_PREFIX}-${providerSel.value}`, v);
     keyInput.value = '';
     showKeyState();
     setStatus('API Key 已保存在本浏览器。', 'ok');
   });
   $('#aiForgetKeyBtn').addEventListener('click', () => {
-    writeText(KEY_STORAGE, '');
+    writeText(`${KEY_PREFIX}-${providerSel.value}`, '');
+    if (providerSel.value === 'anthropic') writeText(KEY_PREFIX, '');
     showKeyState();
     setStatus('已从本浏览器删除 API Key。');
+  });
+  $('#aiTestBtn').addEventListener('click', () => { persist(); testConnection(); });
+  $('#aiRevisionsBtn').addEventListener('click', exportRevisions);
+  $('#aiVerifyList').addEventListener('click', e => {
+    const b = e.target.closest('[data-ai-decide]');
+    if (!b) return;
+    e.preventDefault();
+    const id = b.dataset.card;
+    if (decisions[id]?.action === b.dataset.aiDecide) delete decisions[id];
+    else decisions[id] = {action: b.dataset.aiDecide, at: new Date().toISOString()};
+    writeJson(DECISION_STORAGE, decisions);
+    renderReport();
   });
 
   $('#aiRunPendingBtn').addEventListener('click', () => runVerification('pending'));

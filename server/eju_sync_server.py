@@ -27,6 +27,7 @@ Endpoints (JSON; auth with `Authorization: Bearer <member token>`):
   GET  /api/v2/ping-stream                             -> SSE test for check.html: a ping every 3 s for 60 s
   POST /api/v2/files    (raw image body)               -> store a homework photo, returns {url}
   GET  /api/v2/files/ID                                -> the photo (IDs are unguessable; <img> cannot send a token)
+  POST /api/v2/relay    {url, headers, body}           -> forward one JSON request to an allow-listed AI API host
   GET  /api/v2/notifications?since=ID                  -> homework notices for a bot (header X-Bot-Token)
 
 Homework is carried by the same event log: the teacher writes `assignment` and `grade`
@@ -39,6 +40,7 @@ Configuration (environment variables):
   EJU_SYNC_MAX_MEMBERS members per group      (default 4)
   EJU_STATIC_DIR       also serve the site from this directory (optional)
   EJU_SYNC_FILES       homework photo directory (default: `files` next to the database)
+  EJU_RELAY_HOSTS      comma-separated hosts /relay may call (default: api.deepseek.com)
   EJU_BOT_TOKEN        token a bot sends as X-Bot-Token to read /notifications (unset = disabled)
 """
 import hashlib
@@ -50,6 +52,8 @@ import secrets
 import sqlite3
 import threading
 import time
+import urllib.error
+import urllib.request
 from http import HTTPStatus
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
@@ -62,6 +66,8 @@ MAX_MEMBERS = int(os.environ.get('EJU_SYNC_MAX_MEMBERS', '4'))
 STATIC_DIR = os.environ.get('EJU_STATIC_DIR')
 FILES_DIR = os.environ.get('EJU_SYNC_FILES')  # resolved in make_server (defaults next to the DB)
 BOT_TOKEN = os.environ.get('EJU_BOT_TOKEN', '')
+RELAY_HOSTS = {h.strip().lower() for h in os.environ.get('EJU_RELAY_HOSTS', 'api.deepseek.com').split(',') if h.strip()}
+RELAY_TIMEOUT = 150
 
 MAX_BODY = 2 * 1024 * 1024
 MAX_FILE = 6 * 1024 * 1024
@@ -472,6 +478,8 @@ class Handler(BaseHTTPRequestHandler):
                                                  'device': str(body.get('device') or '')[:40],
                                                  'payload': body.get('payload')})
                 return self.send_json(HTTPStatus.OK, {'ok': True})
+            if route == ('POST', '/relay'):
+                return self.relay()
             if route == ('POST', '/files'):
                 return self.upload_file(member)
             if route == ('GET', '/stream'):
@@ -516,6 +524,33 @@ class Handler(BaseHTTPRequestHandler):
             pass
         finally:
             HUB.unsubscribe(member['group_id'], q)
+
+    # ─── AI relay: lets the browser reach an API that blocks cross-origin calls ───
+    def relay(self):
+        body = self.read_json()
+        target = urlparse(str(body.get('url') or ''))
+        # Only https, only allow-listed hosts: without this the server would be an open proxy
+        if target.scheme != 'https' or (target.hostname or '').lower() not in RELAY_HOSTS or target.port not in (None, 443):
+            raise ApiError(HTTPStatus.FORBIDDEN, f'中转只允许访问：{", ".join(sorted(RELAY_HOSTS))}')
+        headers = {'Content-Type': 'application/json', 'User-Agent': 'eju-sync-relay/1'}
+        auth = (body.get('headers') or {}).get('Authorization')
+        if isinstance(auth, str):
+            headers['Authorization'] = auth[:400]
+        payload = json.dumps(body.get('body') if body.get('body') is not None else {}).encode('utf-8')
+        req = urllib.request.Request(target.geturl(), data=payload, headers=headers, method='POST')
+        try:
+            with urllib.request.urlopen(req, timeout=RELAY_TIMEOUT) as up:
+                status, data = up.status, up.read(8 * 1024 * 1024)
+        except urllib.error.HTTPError as err:
+            status, data = err.code, err.read(1024 * 1024)
+        except (urllib.error.URLError, TimeoutError, OSError) as err:
+            raise ApiError(HTTPStatus.BAD_GATEWAY, f'中转连不上 {target.hostname}：{getattr(err, "reason", err)}')
+        self.send_response(status)
+        self.send_header('Content-Type', 'application/json; charset=utf-8')
+        self.send_header('Content-Length', str(len(data)))
+        self.send_header('Cache-Control', 'no-store')
+        self.end_headers()
+        self.wfile.write(data)
 
     # ─── homework photos ───
     def upload_file(self, member):
