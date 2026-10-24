@@ -3934,3 +3934,8 @@ sup.ul-n { font-size: 10px; font-weight: 700; margin-left: 1px; color: var(--acc
 .geo-pop[hidden] { display: none; }
 .study-geo-box { background: var(--surface-2, #f5f3ef); border-radius: 4px; padding: 8px 12px; margin-bottom: 12px; font-size: 13px; line-height: 1.7; color: var(--text-muted, #555); }
 .study-geo-box b { color: var(--ink, #222); }
+
+/* 带图真题：原卷页图默认显示，点一下展开全高 */
+.study-paper-box img { cursor: zoom-in; max-width: 100%; }
+.study-paper-box.is-zoom { max-height: none; }
+.study-paper-box.is-zoom img { cursor: zoom-out; }

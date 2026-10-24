@@ -822,9 +822,11 @@
     const paperBtn = $('#studyPaperBtn');
     const paperBox = $('#studyPaperBox');
     paperBox.hidden = true;
+    paperBox.classList.remove('is-zoom');
     if (activeCard.paperImg) {
       paperBtn.hidden = false;
       $('#studyPaperImg').src = activeCard.paperImg;
+      paperBox.hidden = false; // 带图的题默认直接显示原卷页图，「原卷」按钮可收起
     } else {
       paperBtn.hidden = true;
     }
@@ -2492,6 +2494,7 @@
       box.hidden = !box.hidden;
       renderMathIn(box);
     });
+    $('#studyPaperImg').addEventListener('click', () => $('#studyPaperBox').classList.toggle('is-zoom'));
     $('#studyPaperBtn').addEventListener('click', () => {
       const box = $('#studyPaperBox');
       box.hidden = !box.hidden;
