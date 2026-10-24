@@ -2198,6 +2198,16 @@
     try { return localStorage.getItem(ATRI_TOKEN_KEY) || ''; } catch (_) { return ''; }
   }
 
+  // Questions ATRI can send over QQ and grade: plain 4-choice text MCQs with no figure/passage/paper image, no math decks
+  const QUIZ_BLOCKED_Q = /下線部|次の図|次の表|次のグラフ|次の地図|地図中|図中|表中|グラフ中|上の|下の図|右の|左の|写真|資料/;
+  function isQuizable(card) {
+    if (!card || card.type !== 'mcq' || !Array.isArray(card.choices) || card.choices.length !== 4) return false;
+    if (card.deck === '数Ⅰ·A' || card.deck === '公式') return false;
+    if (card.hasFigure || card.paperImg || (card.passage && String(card.passage).trim())) return false;
+    if (card.choices.some(c => /^\s*[①-⑳]\s*$/.test(String(c)))) return false;
+    return !QUIZ_BLOCKED_Q.test(card.q || '');
+  }
+
   function buildAtriReport() {
     const today = tokyoDateKey(Date.now());
     const myName = window.EJU_SYNC?.myName?.();
@@ -2218,6 +2228,17 @@
         correct++;
       }
     }
+    // Newest strict misses first, one entry per card, for ATRI's bedtime / morning recall quiz
+    const wrongItems = [];
+    const seen = new Set();
+    for (const h of [...mine].sort((x, y) => (y.at || 0) - (x.at || 0))) {
+      if (wrongItems.length >= 6) break;
+      if (h.grade !== 'again' || seen.has(h.id)) continue;
+      seen.add(h.id);
+      const card = cards.find(c => c.id === h.id);
+      if (!isQuizable(card)) continue;
+      wrongItems.push({id: card.id, deck: card.deck, q: String(card.q).replace(/\s+/g, ' ').trim().slice(0, 90)});
+    }
     const weakDeck = Object.entries(wrongByDeck).sort((a, b) => b[1] - a[1])[0]?.[0] || '';
     return {
       date: today,
@@ -2231,6 +2252,7 @@
       solid: cards.filter(c => (getProgress(c).box || 0) >= 3).length,
       total: cards.length,
       weakDeck: weakDeck.slice(0, 20),
+      wrongItems,
     };
   }
 
