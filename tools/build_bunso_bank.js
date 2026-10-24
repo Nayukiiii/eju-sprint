@@ -21,10 +21,19 @@ for (const file of files) {
   const cards = JSON.parse(fs.readFileSync(filePath, 'utf8'));
   console.log(`Processing ${file}: ${cards.length} cards`);
   
+  let lastPassage = '';
   for (const c of cards) {
     if (!c.id) throw new Error(`${file}: card missing id`);
     if (seenIds.has(c.id)) throw new Error(`Duplicate id: ${c.id}`);
     seenIds.add(c.id);
+
+    if (c.passage === 'SAME_AS_PREV') {
+      c.passage = lastPassage;
+    } else if (c.passage) {
+      lastPassage = c.passage;
+    } else {
+      lastPassage = '';
+    }
 
     if (!Array.isArray(c.choices) || c.choices.length !== 4) {
       throw new Error(`${c.id}: choices must be an array of 4 items`);

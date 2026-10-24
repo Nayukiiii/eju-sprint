@@ -216,6 +216,58 @@
     return lines.slice(0, 4).join('\n');
   }
 
+  // Normalize deck name to knowledge category
+  function normalizeDeckToCat(deck) {
+    if (!deck) return '';
+    if (/政治|社会/.test(deck)) return 'pol';
+    if (/歴史|历史|条約|条约|国際|国际|外交/.test(deck)) return 'trt';
+    if (/経|经/.test(deck)) return 'eco';
+    if (/地理|地/.test(deck)) return 'geo';
+    if (/数/.test(deck)) return 'math';
+    return '';
+  }
+
+  // 3秒定位核心考点速查卡片（直连真题、高频考点穿透）
+  function findMatchedKp(card) {
+    if (!card) return null;
+    const kpList = window.EJU_KNOWLEDGE || [];
+    if (!kpList.length) return null;
+
+    // 1. Direct explicit link
+    if (card.kpLink) {
+      const direct = kpList.find(k => k.id === card.kpLink);
+      if (direct) return direct;
+    }
+
+    const cardCat = normalizeDeckToCat(card.deck);
+    const sameCatKps = cardCat ? kpList.filter(k => k.cat === cardCat) : [];
+    const searchPool = sameCatKps.length ? sameCatKps : kpList;
+    const textToMatch = `${card.topic || ''} ${card.q || ''} ${card.expl || ''}`;
+
+    // 2. Try topicFilter in same category
+    for (const kp of searchPool) {
+      if (kp.topicFilter) {
+        try {
+          const re = new RegExp(kp.topicFilter, 'i');
+          if (re.test(textToMatch)) return kp;
+        } catch (e) {}
+      }
+    }
+
+    // 3. Try topicFilter across all KPs
+    for (const kp of kpList) {
+      if (kp.topicFilter) {
+        try {
+          const re = new RegExp(kp.topicFilter, 'i');
+          if (re.test(textToMatch)) return kp;
+        } catch (e) {}
+      }
+    }
+
+    // 4. Fallback to same category's first KP or first overall
+    return searchPool[0] || kpList[0];
+  }
+
   // ─── Formula typesetting: turn the formula runs of a mixed CJK/ASCII line into KaTeX ───
   const MATH_OPS = /[=+\-−×÷≦≧≤≥<>^√/²³°⇒]/;
   const MATH_RUN = /[A-Za-z0-9 +\-−×÷=≦≧≤≥<>()\[\]{}^_\\/.,'²³√π°⇒|]+/g;
@@ -512,7 +564,12 @@
 
     for (const item of filteredKp) {
       const reg = item.topicFilter ? new RegExp(item.topicFilter) : null;
-      const relatedCards = cards.filter(c => c.deck === item.deck && (!reg || reg.test(`${c.topic} ${c.q}`)));
+      const relatedCards = cards.filter(c => {
+        const cat = normalizeDeckToCat(c.deck);
+        const catMatch = (cat && cat === item.cat) || (c.deck === item.deck);
+        if (!catMatch) return false;
+        return !reg || reg.test(`${c.topic || ''} ${c.q || ''} ${c.expl || ''}`);
+      });
       const mastered = relatedCards.filter(isMastered).length;
 
       const details = document.createElement('details');
@@ -613,7 +670,9 @@
           const p = getProgress(c);
           if (isWrong(c)) return 0;
           if (isDue(c)) return 1;
-          if (p.reps === 0) return 2;
+          const isReal = c.auditStatus === 'verified' || c.id.startsWith('real-');
+          const realBonus = isReal ? 0 : 5;
+          if (p.reps === 0) return 2 + realBonus;
           if (p.box < 2) return 3;
           return 4 + p.box;
         };
@@ -716,6 +775,16 @@
     // Reset helper boxes
     $('#studyHintBox').hidden = true;
     $('#studyHintBox').textContent = getCardHint(activeCard);
+
+    const passageBox = $('#studyPassageBox');
+    if (passageBox) {
+      if (activeCard.passage) {
+        passageBox.textContent = activeCard.passage;
+        passageBox.hidden = false;
+      } else {
+        passageBox.hidden = true;
+      }
+    }
 
     const paperBtn = $('#studyPaperBtn');
     const paperBox = $('#studyPaperBox');
@@ -1022,10 +1091,11 @@
 
     // Direct link to core knowledge point quick-reference sheet
     const kpList = window.EJU_KNOWLEDGE || [];
-    const matchedKp = kpList.find(k => k.id === activeCard.kpLink) || kpList.find(k => k.deck === activeCard.deck);
+    const matchedKp = findMatchedKp(activeCard);
     if (matchedKp) {
       kpDock.hidden = false;
-      kpBtn.textContent = '考点速查';
+      const shortTitle = (matchedKp.title || '').split('：')[0] || '速查表';
+      kpBtn.textContent = `考点速查：${shortTitle}`;
       kpBtn.onclick = () => {
         $('#refModalTitle').textContent = matchedKp.title;
         $('#refModalBody').innerHTML = matchedKp.html;
@@ -2235,7 +2305,7 @@
     // Hero: continue an unfinished round, otherwise today's mix (due → wrong → unmastered) from all subjects
     $('#heroStartTaskBtn').addEventListener('click', () => {
       if (!$('#resumeSessionBtn').hidden) $('#resumeSessionBtn').click();
-      else startCustomPoolSession(cards, '今日任务', 20);
+      else startCustomPoolSession(getFilteredPoolBySelectedDeck(), '今日任务', 20);
     });
     $('#heroWrongBox').addEventListener('click', () => switchRoute('wrong'));
 
@@ -2296,7 +2366,7 @@
     $('#studyRefBtn').addEventListener('click', () => {
       if (!activeCard) return;
       const kpList = window.EJU_KNOWLEDGE || [];
-      const match = kpList.find(k => k.deck === activeCard.deck) || kpList[0];
+      const match = findMatchedKp(activeCard);
       if (!match) return;
       $('#refModalTitle').textContent = match.title;
       $('#refModalBody').innerHTML = match.html;
