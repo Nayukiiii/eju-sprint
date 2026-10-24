@@ -3896,3 +3896,5 @@ h1, h2, h3, h4,
 .mock-group { margin-bottom: 14px; }
 .mock-group-head { display: flex; justify-content: space-between; align-items: center; gap: 10px; margin-bottom: 4px; }
 .mock-spark { flex: none; }
+
+.expl-ai-tag { display: inline-block; margin-right: 6px; padding: 0 6px; border: 1px solid currentColor; border-radius: 4px; font-size: 11px; opacity: .65; }

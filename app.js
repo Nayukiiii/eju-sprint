@@ -1080,6 +1080,12 @@
       explEl.innerHTML = formatMathStepsHtml(activeCard.expl || '按基本公式代入即可。');
     } else {
       explEl.textContent = getConciseExpl(activeCard);
+      if (activeCard.explAI) {
+        const tag = document.createElement('span');
+        tag.className = 'expl-ai-tag';
+        tag.textContent = 'AI 解析';
+        explEl.prepend(tag);
+      }
     }
     if (activeCard.trap) {
       trapEl.hidden = false;
