@@ -319,11 +319,12 @@
         ${passage ? `
           <div class="mockb-passage" style="margin:12px 0;padding:12px 14px;background:var(--hairline);border-left:3px solid var(--accent);border-radius:4px;font-size:14px;line-height:1.6;white-space:pre-wrap;">
             <div style="font-weight:bold;margin-bottom:6px;color:var(--ink);font-size:12px;opacity:0.8;">【阅读材料 / 题组背景】</div>
-            ${esc(passage)}
-          </div>` : ''}
+            ${window.EJU_READ.passageHtml(card, passage)}
+          </div>
+          ${showCn && card.passage_cn ? window.EJU_READ.cnFoldHtml('材料译文', card.passage_cn, mode === 'cn') : ''}` : ''}
 
         <!-- 题干与题目附图 -->
-        <div class="mock-q" id="mockbQ" style="font-size:16px;line-height:1.7;margin:14px 0 10px;">${esc(qMain)}</div>
+        <div class="mock-q" id="mockbQ" style="font-size:16px;line-height:1.7;margin:14px 0 10px;">${window.EJU_READ.richHtml(qMain)}</div>
         
         ${card.hasFigure && card.paperImg ? `
           <div class="mockb-fig-box" style="margin:12px 0 16px;text-align:center;">
@@ -333,7 +334,7 @@
             <div class="stat-hint" style="margin-top:4px;">🔍 点击图片可在新窗口查看原尺寸高清原卷</div>
           </div>` : ''}
 
-        ${mode !== 'cn' && showCn && card.q_cn && card.q_cn !== card.q ? `<div class="stat-hint" style="margin-bottom:12px;">${esc(card.q_cn)}</div>` : ''}
+        ${mode !== 'cn' && showCn && card.q_cn && card.q_cn !== card.q ? `<div class="stat-hint" style="margin-bottom:12px;">${card.cnAI ? '<span class="expl-ai-tag">AI 译</span>' : ''}${esc(card.q_cn)}</div>` : ''}
 
         <!-- 选项列表 -->
         <div class="mockb-choices">
@@ -343,7 +344,7 @@
             return `
               <button type="button" class="mockb-choice${run.picks[id] === i ? ' is-picked' : ''}" data-pick="${i}">
                 <b>${i + 1}</b>
-                <span>${esc(main)}${cn && mode !== 'cn' ? `<small>${esc(cn)}</small>` : ''}</span>
+                <span>${window.EJU_READ.richHtml(main)}${cn && mode !== 'cn' ? `<small>${esc(cn)}</small>` : ''}</span>
               </button>`;
           }).join('')}
         </div>
@@ -522,7 +523,7 @@
               &nbsp;→&nbsp; 
               官方正解：<b style="color:#2e7d32;">(${x.card.a + 1}) ${esc(mark(x, x.card.a))}</b>
             </div>
-            ${x.card.expl ? `<div class="stat-hint" style="line-height:1.5;background:var(--hairline);padding:8px;border-radius:4px;">💡 解析：${esc(x.card.expl)}</div>` : ''}
+            ${x.card.expl ? `<div class="stat-hint" style="line-height:1.5;background:var(--hairline);padding:8px;border-radius:4px;">💡 解析：${esc(x.card.expl)}</div>${x.card.expl_cn ? window.EJU_READ.cnFoldHtml('解析译文', x.card.expl_cn, false) : ''}` : ''}
           </div>`).join('') || '<p style="color:#2e7d32;font-weight:bold;padding:12px 0;">🎉 太棒了，整卷全对！</p>'}</div>
 
         <div class="mock-foot" style="margin-top:20px;">

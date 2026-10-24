@@ -609,6 +609,7 @@
 
         <div class="study-audit-banner" id="studyAuditBanner" hidden></div>
         <div class="study-passage-box" id="studyPassageBox" hidden></div>
+        <div class="cn-fold-wrap" id="studyPassageCn" hidden></div>
 
         <!-- 题目正文 -->
         <h2 class="study-question" id="studyQuestion"></h2>
@@ -619,15 +620,17 @@
         <div class="study-helper-bar">
           <button class="btn btn-sm" id="studyHintBtn" type="button">提示</button>
           <button class="btn btn-sm" id="studyRefBtn" type="button">速查表</button>
+          <button class="btn btn-sm" id="studyGeoBtn" type="button" hidden>位置速查</button>
           <button class="btn btn-sm btn-unsure" id="studyUnsureBtn" type="button" title="不确定此题答案，按答错计入错题本">不确定</button>
           <button class="btn btn-sm" id="studyPaperBtn" type="button" hidden>原卷</button>
           <button class="btn btn-sm" id="studyBookmarkMathBtn" type="button" hidden>留着讲</button>
         </div>
 
         <div class="study-hint-box" id="studyHintBox" hidden></div>
+        <div class="study-geo-box" id="studyGeoBox" hidden></div>
 
         <div class="study-paper-box" id="studyPaperBox" hidden>
-          <img id="studyPaperImg" src="" alt="真题原卷扫描图">
+          <img id="studyPaperImg" src="" alt="真题原卷扫描图" loading="lazy" title="点一下展开/收起">
         </div>
 
         <!-- EJU 数学マーク式填空面板 (type === 'mark') -->
@@ -673,6 +676,7 @@
           <div class="feedback-answer" id="feedbackAnswer" hidden></div>
           <div class="feedback-opt-expl" id="feedbackOptExpl" hidden></div>
           <div class="feedback-expl" id="feedbackExpl"></div>
+          <div class="cn-fold-wrap" id="feedbackExplCn" hidden></div>
           <div class="feedback-trap" id="feedbackTrap" hidden></div>
           <div class="feedback-kp-dock" id="feedbackKpDock" hidden>
             <button class="btn btn-sm btn-primary" id="studyKpLinkBtn" type="button">查看本题核心考点速查</button>
@@ -1024,6 +1028,8 @@
     <script src="./whiteboard.js"></script>
   <script src="./math_tools.js"></script>
   <script src="./math_types.js"></script>
+  <script src="./geo_hints.js"></script>
+  <script src="./readable.js"></script>
   <script src="./app.js"></script>
   <script src="./homework.js"></script>
   <script src="./mock.js"></script>

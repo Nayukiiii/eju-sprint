@@ -6,7 +6,7 @@ const path = require('path');
 
 const ROOT = path.resolve(__dirname, '..');
 global.window = global;
-for (const f of ['bank.js', 'bank2.js', 'bank3.js', 'bank_math_real.js', 'bank_bunso_extra.js', 'bank_core.js']) {
+for (const f of ['bank.js', 'bank2.js', 'bank3.js', 'bank_math_real.js', 'bank_bunso_real.js', 'bank_bunso_extra.js', 'bank_core.js']) {
   eval(fs.readFileSync(path.join(ROOT, f), 'utf8'));
 }
 
