@@ -11,3 +11,7 @@
 - 所有 152 题都标了概念，没有留空的；个别题（如 2025 第 1 题水泥、2024 第 13 题债务比）只给了背景概念，先修卡不能直接让人做对图表题。
 - 部分概念只有 1～2 张先修卡（该概念本身简单，或题库里已有同主题自编题）。
 - 先修卡只写教科书层面的确定事实；与真题同一事实点相近的题（如「法の支配」「ベルリン会議」）已刻意避免把原题答案原句放进先修卡，但个别概念不可避免地会提到答案所在的知识点。
+
+## 今日题目（feat/ladder-today）
+- 日期表：`ladder.js` 的 `DAY_SUBJECT` / `DAY_SPECIAL`；挑题结果按东京日期存在 localStorage `eju-ladder-v1.picks`。
+- 端到端脚本：`tools/tests/ladder_today.e2e.py`（容器内 Playwright，站点目录拷到 /tmp/eju-ladder-test/site）。
