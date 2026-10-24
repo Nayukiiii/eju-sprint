@@ -324,7 +324,7 @@
           ${showCn && card.passage_cn ? window.EJU_READ.cnFoldHtml('材料译文', card.passage_cn, mode === 'cn') : ''}` : ''}
 
         <!-- 题干与题目附图 -->
-        <div class="mock-q" id="mockbQ" style="font-size:16px;line-height:1.7;margin:14px 0 10px;">${esc(qMain)}</div>
+        <div class="mock-q" id="mockbQ" style="font-size:16px;line-height:1.7;margin:14px 0 10px;">${window.EJU_READ.richHtml(qMain)}</div>
         
         ${card.hasFigure && card.paperImg ? `
           <div class="mockb-fig-box" style="margin:12px 0 16px;text-align:center;">
@@ -344,7 +344,7 @@
             return `
               <button type="button" class="mockb-choice${run.picks[id] === i ? ' is-picked' : ''}" data-pick="${i}">
                 <b>${i + 1}</b>
-                <span>${esc(main)}${cn && mode !== 'cn' ? `<small>${esc(cn)}</small>` : ''}</span>
+                <span>${window.EJU_READ.richHtml(main)}${cn && mode !== 'cn' ? `<small>${esc(cn)}</small>` : ''}</span>
               </button>`;
           }).join('')}
         </div>

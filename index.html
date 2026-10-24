@@ -620,12 +620,14 @@
         <div class="study-helper-bar">
           <button class="btn btn-sm" id="studyHintBtn" type="button">提示</button>
           <button class="btn btn-sm" id="studyRefBtn" type="button">速查表</button>
+          <button class="btn btn-sm" id="studyGeoBtn" type="button" hidden>位置速查</button>
           <button class="btn btn-sm btn-unsure" id="studyUnsureBtn" type="button" title="不确定此题答案，按答错计入错题本">不确定</button>
           <button class="btn btn-sm" id="studyPaperBtn" type="button" hidden>原卷</button>
           <button class="btn btn-sm" id="studyBookmarkMathBtn" type="button" hidden>留着讲</button>
         </div>
 
         <div class="study-hint-box" id="studyHintBox" hidden></div>
+        <div class="study-geo-box" id="studyGeoBox" hidden></div>
 
         <div class="study-paper-box" id="studyPaperBox" hidden>
           <img id="studyPaperImg" src="" alt="真题原卷扫描图">
@@ -1026,6 +1028,7 @@
     <script src="./whiteboard.js"></script>
   <script src="./math_tools.js"></script>
   <script src="./math_types.js"></script>
+  <script src="./geo_hints.js"></script>
   <script src="./readable.js"></script>
   <script src="./app.js"></script>
   <script src="./homework.js"></script>

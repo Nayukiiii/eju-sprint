@@ -725,7 +725,8 @@
     const show = cnVisible(card);
     const main = langMode === 'cn' && card.q_cn ? card.q_cn : (card.q || card.q_cn);
     const other = langMode === 'cn' ? card.q : card.q_cn;
-    questionEl.textContent = main;
+    if (isMathCard(card)) questionEl.textContent = main;
+    else questionEl.innerHTML = window.EJU_READ.richHtml(main);
     if (show && other && other !== main) {
       subEl.hidden = false;
       subEl.textContent = `${langMode === 'cn' ? '日文原文' : '中文译文'}：${other}`;
@@ -792,6 +793,22 @@
     $('#studyHintBox').hidden = true;
     $('#studyHintBox').textContent = getCardHint(activeCard);
 
+    // 位置速查：本题题干/材料/选项里出现的国家、地区、城市等
+    window.EJU_READ.hidePop();
+    const geoBtn = $('#studyGeoBtn');
+    const geoBox = $('#studyGeoBox');
+    const geoTerms = isMathCard(activeCard) ? [] : window.EJU_READ.geoTerms(activeCard);
+    geoBox.hidden = true;
+    geoBox.textContent = '';
+    geoBtn.hidden = geoTerms.length === 0;
+    geoTerms.forEach(({word, hint}) => {
+      const row = document.createElement('div');
+      const b = document.createElement('b');
+      b.textContent = word;
+      row.append(b, `：${hint}`);
+      geoBox.appendChild(row);
+    });
+
     const passageBox = $('#studyPassageBox');
     if (passageBox) {
       if (activeCard.passage) {
@@ -848,7 +865,7 @@
         const main = langMode === 'cn' && cnText ? cnText : choiceText;
         const sub = langMode === 'cn' ? (cnText ? choiceText : '') : cnText;
         const cn = sub ? `<span class="choice-cn">${sub}</span>` : '';
-        btn.innerHTML = `<span class="choice-key">${idx + 1}</span><span class="choice-body"><span class="choice-jp">${main}</span>${cn}</span>`;
+        btn.innerHTML = `<span class="choice-key">${idx + 1}</span><span class="choice-body"><span class="choice-jp">${isMathCard(activeCard) ? main : window.EJU_READ.richHtml(main)}</span>${cn}</span>`;
         btn.addEventListener('click', () => handleAnswerMcq(idx, btn));
         choicesBox.appendChild(btn);
       });
@@ -2466,6 +2483,10 @@
 
     // Study view controls
     $('#exitStudyBtn').addEventListener('click', () => switchRoute('today'));
+    $('#studyGeoBtn').addEventListener('click', () => {
+      const box = $('#studyGeoBox');
+      box.hidden = !box.hidden;
+    });
     $('#studyHintBtn').addEventListener('click', () => {
       const box = $('#studyHintBox');
       box.hidden = !box.hidden;
