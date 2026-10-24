@@ -12,9 +12,18 @@
   const SUBJECTS = ['全部', '政治', '経済', '地理', '歴史', '社会'];
   // 11/8 考试前的冲刺日程：当天主科目（其余日子取「全部」）
   const DAY_SUBJECT = {
-    '10-25': '経済', '10-26': '政治', '10-27': '地理', '10-28': '歴史', '10-29': '経済',
+    '10-24': '経済', '10-25': '経済', '10-26': '政治', '10-27': '地理', '10-28': '歴史', '10-29': '経済',
     '10-30': '政治', '10-31': '地理', '11-02': '歴史', '11-03': '社会'
   };
+  // 不挑单科题的日子：整回模考日 / 复盘日 / 2025 前 20 题 / 休息日
+  const DAY_SPECIAL = {
+    '11-01': {kind: 'mock', text: '今天做整回模考：去「文模」选 2023第1回（11/1）'},
+    '11-04': {kind: 'mock', text: '今天做整回模考：去「文模」选 2024（11/4）'},
+    '11-05': {kind: 'review'},
+    '11-06': {kind: 'y2025'},
+    '11-07': {kind: 'rest', text: '今天不开新题，看导图和错题本，早睡。'}
+  };
+  const TODAY_N = 6;
   const LS_KEY = 'eju-ladder-v1';
 
   const esc = s => String(s).replace(/[&<>"]/g, ch => ({'&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;'}[ch]));
@@ -73,6 +82,10 @@
   }
 
   function restoreParent(parent) {
+    if (parent.next) {
+      parent.next();
+      return;
+    }
     const list = parent.ids.map(id => cardById.get(id)).filter(Boolean);
     if (parent.index >= list.length) {
       const st = A.getState();
@@ -88,7 +101,8 @@
     const s = A.getSession();
     const label = A.getState().activeSession?.label || '';
     A.recordCardGrade(card, 'again');
-    startMini(card, {ids: s.queue.map(c => c.id), index: s.index + 1, label});
+    if (run && run.queueRef === s.queue) startMini(card, {next: runNext});
+    else startMini(card, {ids: s.queue.map(c => c.id), index: s.index + 1, label});
   }
 
   // ── 作答页：先修路径 ──
@@ -148,7 +162,18 @@
     const tail = cid === null
       ? '<span class="lad-chip lad-chip-now">● 回到原题</span>'
       : '<span class="lad-chip lad-chip-todo">回到原题</span>';
-    el.innerHTML = `<span class="lad-banner-label">先修小轮</span>${path}<span class="lad-arrow">→</span>${tail}`;
+    const pos = mini.parent?.next ? todayPos(mini.targetId) : '';
+    el.innerHTML = `<span class="lad-banner-label">${pos}先修小轮</span>${path}<span class="lad-arrow">→</span>${tail}`;
+    sc.parentNode.insertBefore(el, sc);
+  }
+
+  function showRunBanner(card) {
+    const sc = $('#view-study')?.querySelector('.study-card');
+    if (!sc) return;
+    const el = document.createElement('div');
+    el.id = 'ladderBanner';
+    el.className = 'lad-banner';
+    el.innerHTML = `<span class="lad-banner-label">${todayPos(card.id)}今日阶梯</span>`;
     sc.parentNode.insertBefore(el, sc);
   }
 
@@ -195,6 +220,145 @@
   const daySubject = () => DAY_SUBJECT[todayKey()] || '全部';
   const currentSubject = () => (local.subjectDay === todayKey() && SUBJECTS.includes(local.subject)) ? local.subject : daySubject();
   let openQid = null;
+  let listOpen = false;
+  let run = null; // 「开始今日阶梯」的进行状态：{queueRef}
+
+  const realDate = () => new Intl.DateTimeFormat('en-CA', {timeZone: 'Asia/Tokyo'}).format(new Date());
+  const pickKey = () => realDate().slice(0, 4) + '-' + todayKey();
+  const planFor = key => DAY_SPECIAL[key] || {kind: 'subject', subject: DAY_SUBJECT[key] || '全部'};
+  const plan = () => planFor(todayKey());
+  const stemOf = card => String(card.q || '').replace(/^問\d+(\([^)]*\))?\s*/, '').replace(/\s+/g, ' ').slice(0, 30);
+  // 今天已有作答记录（答对或答错都算「已记录」）
+  const recordedToday = id => (A.getState().history || []).some(h => h.id === id && h.date === realDate());
+  const completed = card => cardDone(card) || recordedToday(card.id);
+  const conceptOrder = cid => Object.keys(D.concepts).indexOf(cid);
+  const inProgress = card => conceptsOf(card.id).some(cid => {
+    const cs = conceptCards(cid);
+    const n = cs.filter(cardDone).length;
+    return n > 0 && n < cs.length;
+  });
+
+  function candidatePool(pl) {
+    const all = realCards();
+    if (pl.kind === 'review') {
+      const prog = A.getState().progress || {};
+      return all.filter(c => prog[c.id]?.inWrongBook).sort((a, b) => (prog[b.id].updatedAt || 0) - (prog[a.id].updatedAt || 0));
+    }
+    if (pl.kind === 'y2025') return all.filter(c => c.sitting === '2025' && c.no <= 20 && !cardDone(c));
+    return all.filter(c => (pl.subject === '全部' || c.deck === pl.subject) && !cardDone(c));
+  }
+
+  // 挑题：先尽量不同概念，其次先挑「先修进行中」的，再尽量不同回次，最后按概念顺序（先易后难）
+  function pickCards(pool, n, taken) {
+    const chosen = [];
+    const usedC = new Set();
+    const sit = {};
+    for (const c of taken) {
+      usedC.add(conceptsOf(c.id)[0]);
+      sit[c.sitting] = (sit[c.sitting] || 0) + 1;
+    }
+    const left = pool.filter(c => !taken.some(t => t.id === c.id));
+    while (chosen.length < n && left.length) {
+      const key = c => [usedC.has(conceptsOf(c.id)[0]) ? 1 : 0, inProgress(c) ? 0 : 1, sit[c.sitting] || 0, conceptOrder(conceptsOf(c.id)[0]), c.sitting, c.no];
+      left.sort((a, b) => {
+        const ka = key(a), kb = key(b);
+        for (let i = 0; i < ka.length; i++) if (ka[i] !== kb[i]) return ka[i] < kb[i] ? -1 : 1;
+        return 0;
+      });
+      const c = left.shift();
+      chosen.push(c);
+      usedC.add(conceptsOf(c.id)[0]);
+      sit[c.sitting] = (sit[c.sitting] || 0) + 1;
+    }
+    return chosen;
+  }
+
+  // 当天的挑选存进 localStorage，同一东京日期内刷新不变
+  function todayCards() {
+    const pl = plan();
+    if (pl.kind === 'mock' || pl.kind === 'rest') return [];
+    const key = pickKey();
+    local.picks = local.picks || {};
+    let entry = local.picks[key];
+    if (!entry || !Array.isArray(entry.ids)) {
+      entry = {ids: pickCards(candidatePool(pl), TODAY_N, []).map(c => c.id)};
+      local.picks[key] = entry;
+      for (const k of Object.keys(local.picks).sort().slice(0, -10)) delete local.picks[k];
+      saveLocal(local);
+    }
+    return entry.ids.map(id => cardById.get(id)).filter(Boolean);
+  }
+
+  function addExtra(n) {
+    const pl = plan();
+    const cur = todayCards();
+    const more = pickCards(candidatePool(pl), n, cur);
+    if (!more.length) return;
+    local.picks[pickKey()].ids.push(...more.map(c => c.id));
+    saveLocal(local);
+  }
+
+  const todayPos = id => {
+    const i = todayCards().findIndex(c => c.id === id);
+    return i < 0 ? '' : `今日 ${i + 1}/${todayCards().length}　`;
+  };
+
+  // 依次处理今天没做的题：先修没掌握的先走先修小轮（复用 startMini），否则直接作答
+  function startQuestion(card) {
+    const pending = conceptsOf(card.id).filter(c => !conceptMastered(c));
+    if (!pending.length || local.skip[card.id]) {
+      const list = [card];
+      run.queueRef = list;
+      A.setSession(list, '今日阶梯', 0);
+    } else {
+      startMini(card, {next: runNext});
+    }
+  }
+
+  function runNext() {
+    const left = todayCards().filter(c => !completed(c));
+    if (!run || !left.length) {
+      run = null;
+      A.getState().activeSession = null;
+      A.saveState();
+      A.switchRoute('today');
+      return;
+    }
+    startQuestion(left[0]);
+  }
+
+  function startToday() {
+    const left = todayCards().filter(c => !completed(c));
+    if (!left.length) return;
+    run = {queueRef: null};
+    startQuestion(left[0]);
+  }
+
+  function todayHtml() {
+    const pl = plan();
+    if (pl.kind === 'mock') {
+      return `<section class="lad-today"><div class="lad-today-head"><b>今日题目</b></div><p class="lad-today-note">${esc(pl.text)}</p><button class="btn btn-primary lad-go" data-act="mock" type="button">去文模</button></section>`;
+    }
+    if (pl.kind === 'rest') {
+      return `<section class="lad-today"><div class="lad-today-head"><b>今日题目</b></div><p class="lad-today-note">${esc(pl.text)}</p></section>`;
+    }
+    const cs = todayCards();
+    const title = {review: '复盘日：错题本里的真题', y2025: '2025 前 20 题'}[pl.kind] || (pl.subject === '全部' ? '全部科目' : pl.subject);
+    if (!cs.length) {
+      return `<section class="lad-today"><div class="lad-today-head"><b>今日题目</b> <small>${esc(title)}</small></div><p class="lad-today-note">${pl.kind === 'review' ? '错题本里还没有真题。' : '这个范围的真题已经全部做对了。'}</p></section>`;
+    }
+    const doneN = cs.filter(completed).length;
+    const rows = cs.map(c => {
+      const st = statusOf(c);
+      const path = conceptsOf(c.id).map(cid => `<span class="lad-chip lad-chip-${conceptMastered(cid) ? 'done' : 'todo'}">${conceptMastered(cid) ? '✓ ' : ''}${esc(D.concepts[cid].titleCn)}</span>`).join('');
+      return `<button class="lad-trow${openQid === c.id ? ' is-open' : ''}" type="button" data-qid="${c.id}"><span class="lad-ti" aria-hidden="true">${STATUS_ICON[st]}</span><span class="lad-tb"><span class="lad-tl"><b>${qLabel(c)}</b> ${esc(stemOf(c))}</span><span class="lad-tc">${path}${recordedToday(c.id) && st !== 'done' ? '<span class="lad-chip">已做</span>' : ''}</span></span><span class="lad-sr">${STATUS_TEXT[st]}</span></button>`;
+    }).join('');
+    const left = cs.length - doneN;
+    const action = left
+      ? `<button class="btn btn-primary lad-go" data-act="start-today" type="button">${doneN ? `继续今日阶梯（还剩 ${left} 题）` : `开始今日阶梯（${cs.length} 题）`}</button>`
+      : `<div class="lad-today-done">今天的阶梯完成了</div><button class="btn lad-go" data-act="more" type="button">再来 3 题</button>`;
+    return `<section class="lad-today"><div class="lad-today-head"><b>今日题目</b> <small>${esc(title)}</small><span class="lad-prog">今日 ${doneN}/${cs.length}</span></div>${rows}<div id="ladderDetail" class="lad-detail"></div>${action}</section>`;
+  }
 
   const sittingShort = card => ({'2023_1': '23-1', '2023_2': '23-2', '2024': '24', '2025': '25'}[card.sitting] || card.sitting);
   const qLabel = card => `${sittingShort(card)}·${String(card.no).padStart(2, '0')}`;
@@ -246,21 +410,34 @@
       return `<div class="lad-group"><div class="lad-group-head"><b>${esc(info.titleCn)}</b> <small>${esc(info.titleJp)}</small> ${tag}</div><div class="lad-qs">${chips}</div></div>`;
     }).join('');
 
+    const today = todayHtml();
     el.innerHTML = `
       <div class="lad-home-head">
-        <h2 class="section-title">今日阶梯 <small>${subject === '全部' ? '全部科目' : esc(subject)}</small></h2>
-        <span class="lad-prog">已解锁 <b>${unlocked}</b> / ${list.length}　已做对 ${doneN}</span>
+        <h2 class="section-title">今日阶梯</h2>
+      </div>
+      ${today}
+      <div class="lad-home-head lad-home-sub">
+        <b>全部真题</b>
+        <span class="lad-prog">已解锁 <b>${unlocked}</b> / ${list.length}　已做对 ${doneN}　<small>${subject === '全部' ? '全部科目' : esc(subject)}</small></span>
       </div>
       <div class="lad-bar"><span style="width:${Math.round(unlocked / list.length * 100)}%"></span></div>
       <div class="lad-subjects" role="group" aria-label="科目">
         ${SUBJECTS.map(s => `<button class="lad-subj${s === subject ? ' is-active' : ''}" type="button" data-subj="${s}">${s}${s === daySubject() ? '·今日' : ''}</button>`).join('')}
       </div>
       <div class="lad-hint">先修概念掌握了，真题才解锁。不想补的题可以点开选「我已会，直接做」。</div>
-      <details class="lad-list"${subject === '全部' ? '' : ' open'}>
+      <details class="lad-list"${listOpen ? ' open' : ''}>
         <summary>题目清单（${list.length} 题，按概念分组）</summary>
         ${groupHtml}
       </details>
-      <div class="lad-detail" id="ladderDetail"></div>`;
+      ${today.includes('id="ladderDetail"') ? '' : '<div class="lad-detail" id="ladderDetail"></div>'}`;
+    el.querySelector('.lad-list')?.addEventListener('toggle', e => { listOpen = e.target.open; });
+    el.querySelectorAll('.lad-trow').forEach(btn => btn.addEventListener('click', () => {
+      openQid = openQid === btn.dataset.qid ? null : btn.dataset.qid;
+      renderHome();
+    }));
+    el.querySelector('[data-act="start-today"]')?.addEventListener('click', startToday);
+    el.querySelector('[data-act="more"]')?.addEventListener('click', () => { addExtra(3); renderHome(); });
+    el.querySelector('[data-act="mock"]')?.addEventListener('click', () => A.switchRoute('mockb'));
     el.querySelectorAll('.lad-subj').forEach(btn => btn.addEventListener('click', () => {
       local.subject = btn.dataset.subj;
       local.subjectDay = todayKey();
@@ -324,6 +501,20 @@
     .lad-subj { font: inherit; font-size: 13px; padding: 6px 10px; min-height: 34px; border-radius: 16px; border: 1px solid var(--border); background: var(--surface); color: var(--text); cursor: pointer; }
     .lad-subj.is-active { background: var(--navy); border-color: var(--navy); color: var(--surface); }
     .lad-hint { font-size: 12px; color: var(--text-muted); margin: 8px 0; }
+    .lad-home-sub { margin-top: 14px; }
+    .lad-today { margin: 8px 0 4px; }
+    .lad-today-head { display: flex; align-items: baseline; gap: 6px; flex-wrap: wrap; margin-bottom: 6px; }
+    .lad-today-head small { color: var(--text-muted); font-size: 12px; }
+    .lad-today-head .lad-prog { margin-left: auto; }
+    .lad-today-note { margin: 6px 0 10px; font-size: 14px; }
+    .lad-today-done { text-align: center; font-weight: 600; color: var(--ok); margin: 10px 0 6px; }
+    .lad-trow { display: flex; align-items: flex-start; gap: 8px; width: 100%; text-align: left; font: inherit; padding: 8px 10px; margin-bottom: 6px; border: 1px solid var(--border); border-radius: 8px; background: var(--surface); color: var(--text); cursor: pointer; }
+    .lad-trow.is-open { outline: 2px solid var(--navy); outline-offset: 1px; }
+    .lad-ti { flex: none; width: 22px; line-height: 20px; }
+    .lad-tb { flex: 1; min-width: 0; }
+    .lad-tl { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; font-size: 13px; line-height: 1.4; }
+    .lad-tc { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 3px; }
+    .lad-tc .lad-chip { font-size: 11px; padding: 1px 7px; }
     .lad-list summary { cursor: pointer; font-size: 13px; color: var(--navy); padding: 6px 0; }
     .lad-group { margin: 8px 0 12px; }
     .lad-group-head { font-size: 13px; margin-bottom: 4px; }
@@ -371,7 +562,10 @@
     feedback: renderFeedbackBox,
     rendered(card) {
       clearStudyExtras();
-      if (!mini) return;
+      if (!mini) {
+        if (run && run.queueRef === A.getSession().queue) showRunBanner(card);
+        return;
+      }
       if (!miniActive()) {
         mini = null;
         return;
@@ -380,7 +574,11 @@
       else showBanner(card);
     },
     sessionEnd() {
-      if (!mini) return false;
+      if (!mini) {
+        if (!run || run.queueRef !== A.getSession().queue) return false;
+        runNext();
+        return true;
+      }
       const m = mini;
       const ok = m.queueRef === A.getSession().queue;
       mini = null;
@@ -391,7 +589,13 @@
   };
 
   // 供自测使用
-  window.EJU_LADDER_API = {statusOf, conceptMastered, cardDone, renderHome};
+  window.EJU_LADDER_API = {
+    statusOf, conceptMastered, cardDone, renderHome, planFor, SUBJECTS, DAY_SUBJECT, DAY_SPECIAL,
+    preview: key => {
+      const pl = planFor(key);
+      return (pl.kind === 'mock' || pl.kind === 'rest') ? [] : pickCards(candidatePool(pl), TODAY_N, []).map(c => c.id);
+    }
+  };
 
   window.addEventListener('eju-state-saved', () => {
     if ($('#view-today')?.classList.contains('is-active')) renderHome();

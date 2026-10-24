@@ -2992,6 +2992,7 @@
     getState: () => state,
     getProgress,
     recordCardGrade,
+    saveState,
     switchRoute,
     getSession: () => ({queue, index: sessionIndex, card: activeCard}),
     setSession(list, label, index = 0) {
