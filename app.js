@@ -657,14 +657,23 @@
     return cards.filter(found.filter);
   }
 
-  function prioritizeCards(pool, limit = 20) {
+  // Official (real) questions vs self-written ones. The self-written cards were drilled first, so they sit in the
+  // wrong book / due list for days and a plain priority sort never reaches the real questions. For the everyday
+  // entry points (今日任务, 智能刷题, a subject…) reserve a share of the round for real questions, ramping up toward the exam.
+  const isRealCard = c => c.auditStatus === 'verified' || String(c.id).startsWith('real-');
+  function realShareToday() {
+    const d = localDateKey();
+    return d <= '2026-10-28' ? 0.3 : d <= '2026-11-03' ? 0.5 : 0.7;
+  }
+
+  function prioritizeCards(pool, limit = 20, opts = {}) {
     // Shuffle first: the sort is stable, so cards of equal priority come out mixed across subjects
     const shuffled = [...pool];
     for (let i = shuffled.length - 1; i > 0; i--) {
       const j = Math.floor(Math.random() * (i + 1));
       [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
     }
-    return shuffled
+    const ranked = shuffled
       .sort((a, b) => {
         const score = c => {
           const p = getProgress(c);
@@ -677,12 +686,25 @@
           return 4 + p.box;
         };
         return score(a) - score(b);
-      })
-      .slice(0, limit);
+      });
+    if (!opts.mixReal) return ranked.slice(0, limit);
+    const real = ranked.filter(isRealCard);
+    const rest = ranked.filter(c => !isRealCard(c));
+    if (!real.length || !rest.length) return ranked.slice(0, limit);
+    let nReal = Math.min(real.length, Math.round(limit * realShareToday()));
+    let nRest = Math.min(rest.length, limit - nReal);
+    nReal = Math.min(real.length, limit - nRest); // not enough self-written cards: top up with real ones
+    const total = nReal + nRest;
+    // Spread the real questions evenly, never first: start with a warm-up, then the harder ones
+    const realAt = new Set(Array.from({length: nReal}, (_, k) => Math.floor(((k + 1) * total) / (nReal + 1))));
+    const picked = [];
+    let ri = 0, si = 0;
+    for (let i = 0; i < total; i++) picked.push(realAt.has(i) ? real[ri++] : rest[si++]);
+    return picked;
   }
 
-  function startCustomPoolSession(pool, label, limit = 20) {
-    const picked = prioritizeCards(pool, limit);
+  function startCustomPoolSession(pool, label, limit = 20, opts = {}) {
+    const picked = prioritizeCards(pool, limit, opts);
     if (!picked.length) return;
     queue = picked;
     sessionIndex = 0;
@@ -1364,7 +1386,7 @@
         btnText: '去刷文综',
         onAction: () => {
           setPeriodMode('bunso');
-          startCustomPoolSession(cards.filter(c => BUNSO_DECKS.includes(c.deck)), '今日文综冲刺', 30);
+          startCustomPoolSession(cards.filter(c => BUNSO_DECKS.includes(c.deck)), '今日文综冲刺', 30, {mixReal: true});
         }
       },
       {
@@ -1535,7 +1557,7 @@
           </div>
         `;
         modBox.querySelector('button')?.addEventListener('click', () => {
-          startCustomPoolSession(unmastered.length ? unmastered : pool, mod.label, 20);
+          startCustomPoolSession(unmastered.length ? unmastered : pool, mod.label, 20, {mixReal: true});
         });
         grid.appendChild(modBox);
       }
@@ -2434,7 +2456,7 @@
     $('#statDueBox').addEventListener('click', () => {
       const duePool = cards.filter(isDue);
       if (duePool.length) startCustomPoolSession(duePool, '到期复习', 25);
-      else startCustomPoolSession(getFilteredPoolBySelectedDeck(), '智能刷题', 20);
+      else startCustomPoolSession(getFilteredPoolBySelectedDeck(), '智能刷题', 20, {mixReal: true});
     });
     $('#statWrongBox').addEventListener('click', () => switchRoute('wrong'));
     $('#statMasteryBox').addEventListener('click', () => switchRoute('plan'));
@@ -2443,16 +2465,16 @@
     // Hero: continue an unfinished round, otherwise today's mix (due → wrong → unmastered) from all subjects
     $('#heroStartTaskBtn').addEventListener('click', () => {
       if (!$('#resumeSessionBtn').hidden) $('#resumeSessionBtn').click();
-      else startCustomPoolSession(getFilteredPoolBySelectedDeck(), '今日任务', 20);
+      else startCustomPoolSession(getFilteredPoolBySelectedDeck(), '今日任务', 20, {mixReal: true});
     });
     $('#heroWrongBox').addEventListener('click', () => switchRoute('wrong'));
 
     $('#startSmartBtn').addEventListener('click', () => {
-      startCustomPoolSession(getFilteredPoolBySelectedDeck(), selectedDeck, 20);
+      startCustomPoolSession(getFilteredPoolBySelectedDeck(), selectedDeck, 20, {mixReal: true});
     });
     $('#startUnmasteredBtn').addEventListener('click', () => {
       const pool = getFilteredPoolBySelectedDeck().filter(c => !isMastered(c));
-      startCustomPoolSession(pool.length ? pool : getFilteredPoolBySelectedDeck(), `${selectedDeck}·未掌握`, 20);
+      startCustomPoolSession(pool.length ? pool : getFilteredPoolBySelectedDeck(), `${selectedDeck}·未掌握`, 20, {mixReal: true});
     });
     $('#startVariantBtn').addEventListener('click', () => {
       const pool = getFilteredPoolBySelectedDeck().filter(isVariantCard);
