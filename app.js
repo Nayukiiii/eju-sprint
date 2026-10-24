@@ -729,6 +729,12 @@
     if (show && other && other !== main) {
       subEl.hidden = false;
       subEl.textContent = `${langMode === 'cn' ? '日文原文' : '中文译文'}：${other}`;
+      if (card.cnAI && langMode !== 'cn') {
+        const tag = document.createElement('span');
+        tag.className = 'expl-ai-tag';
+        tag.textContent = 'AI 译';
+        subEl.prepend(tag);
+      }
     } else {
       subEl.hidden = true;
     }
@@ -740,11 +746,21 @@
     renderMathIn(questionEl.parentElement);
   }
 
+  // 材料的 AI 中文译文：折叠，随语言模式显隐（日文优先模式要先点「看不懂」）
+  function applyStudyPassageCn(card) {
+    const box = $('#studyPassageCn');
+    if (!box) return;
+    const show = Boolean(card.passage && card.passage_cn) && cnVisible(card);
+    box.hidden = !show;
+    box.innerHTML = show ? window.EJU_READ.cnFoldHtml('材料译文', card.passage_cn, langMode === 'cn') : '';
+  }
+
   function revealStudyChinese(record) {
     if (!activeCard || cnVisible(activeCard)) return;
     revealedCn.add(activeCard.id);
     if (record) recordLangHelp(activeCard);
     applyStudyLang(activeCard, studyLangEls());
+    applyStudyPassageCn(activeCard);
   }
 
   const studyLangEls = () => ({questionEl: $('#studyQuestion'), subEl: $('#studyQuestionSub'),
@@ -843,6 +859,7 @@
     }
 
     applyStudyLang(activeCard, studyLangEls());
+    applyStudyPassageCn(activeCard);
     renderMathIn($('#view-study'));
   }
 
@@ -1086,6 +1103,12 @@
         tag.textContent = 'AI 解析';
         explEl.prepend(tag);
       }
+    }
+    const explCnBox = $('#feedbackExplCn');
+    if (explCnBox) {
+      const showCn = Boolean(activeCard.expl_cn) && cnVisible(activeCard);
+      explCnBox.hidden = !showCn;
+      explCnBox.innerHTML = showCn ? window.EJU_READ.cnFoldHtml('解析译文', activeCard.expl_cn, true) : '';
     }
     if (activeCard.trap) {
       trapEl.hidden = false;

@@ -30,5 +30,11 @@
     return note + underlineHtml(esc(p));
   }
 
-  window.EJU_READ = {esc, underlineHtml, underlineMissing, passageHtml};
+  // 折叠的 AI 中文译文块（label 例：材料译文）；文本全部转义，换行由 CSS 保留
+  function cnFoldHtml(label, text, open) {
+    if (!text) return '';
+    return `<details class="cn-fold"${open ? ' open' : ''}><summary>${esc(label)} <span class="expl-ai-tag">AI 译</span></summary><div class="cn-fold-body">${esc(text)}</div></details>`;
+  }
+
+  window.EJU_READ = {esc, underlineHtml, underlineMissing, passageHtml, cnFoldHtml};
 })();

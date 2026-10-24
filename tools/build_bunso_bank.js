@@ -22,6 +22,7 @@ for (const file of files) {
   console.log(`Processing ${file}: ${cards.length} cards`);
   
   let lastPassage = '';
+  let lastPassageCn = '';
   for (const c of cards) {
     if (!c.id) throw new Error(`${file}: card missing id`);
     if (seenIds.has(c.id)) throw new Error(`Duplicate id: ${c.id}`);
@@ -33,6 +34,18 @@ for (const file of files) {
       lastPassage = c.passage;
     } else {
       lastPassage = '';
+    }
+
+    if (c.passage_cn === 'SAME_AS_PREV') {
+      c.passage_cn = lastPassageCn;
+    } else if (c.passage_cn) {
+      lastPassageCn = c.passage_cn;
+    } else {
+      lastPassageCn = '';
+    }
+    if (c.passage && !c.passage_cn) throw new Error(`${c.id}: has passage but no passage_cn`);
+    if (!c.q_cn || !c.expl_cn || !Array.isArray(c.choices_cn) || c.choices_cn.length !== 4) {
+      throw new Error(`${c.id}: missing q_cn / expl_cn / choices_cn`);
     }
 
     if (!Array.isArray(c.choices) || c.choices.length !== 4) {
