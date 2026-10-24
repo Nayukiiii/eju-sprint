@@ -779,7 +779,7 @@
     const passageBox = $('#studyPassageBox');
     if (passageBox) {
       if (activeCard.passage) {
-        passageBox.textContent = activeCard.passage;
+        passageBox.innerHTML = window.EJU_READ.passageHtml(activeCard);
         passageBox.hidden = false;
       } else {
         passageBox.hidden = true;

@@ -319,7 +319,7 @@
         ${passage ? `
           <div class="mockb-passage" style="margin:12px 0;padding:12px 14px;background:var(--hairline);border-left:3px solid var(--accent);border-radius:4px;font-size:14px;line-height:1.6;white-space:pre-wrap;">
             <div style="font-weight:bold;margin-bottom:6px;color:var(--ink);font-size:12px;opacity:0.8;">【阅读材料 / 题组背景】</div>
-            ${esc(passage)}
+            ${window.EJU_READ.passageHtml(card, passage)}
           </div>` : ''}
 
         <!-- 题干与题目附图 -->
