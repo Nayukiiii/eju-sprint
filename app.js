@@ -1501,6 +1501,7 @@
     }
 
     renderHistoryChart();
+    renderAccuracyChart();
     renderMocksList();
   }
 
@@ -1529,6 +1530,68 @@
       `;
       chart.appendChild(col);
     });
+  }
+
+  // Daily accuracy curve: same buckets and ownership rule as buildAtriReport (again = wrong, hard = fuzzy, else right)
+  function renderAccuracyChart() {
+    const box = $('#accuracyChart');
+    if (!box) return;
+    const SVGNS = 'http://www.w3.org/2000/svg';
+    const myName = window.EJU_SYNC?.myName?.();
+    const byDay = {};
+    for (const h of state.history) {
+      if (h.by && h.by !== myName) continue;
+      const key = tokyoDateKey(h.at || Date.parse(h.date));
+      const d = byDay[key] || (byDay[key] = {n: 0, ok: 0, soft: 0});
+      d.n++;
+      if (h.grade === 'again') continue;
+      d.soft++;
+      if (h.grade !== 'hard') d.ok++;
+    }
+    const days = [];
+    for (let i = 14; i >= 0; i--) {
+      const key = localDateKey(new Date(Date.now() - i * 86400000));
+      if (key < '2026-10-20') continue;
+      const d = byDay[key];
+      days.push({key, n: d ? d.n : 0, ok: d ? d.ok / d.n : null, soft: d ? d.soft / d.n : null});
+    }
+    const W = 420, H = 210, L = 34, R = 12, T = 22, B = 44;
+    const x = i => L + (days.length > 1 ? (W - L - R) * i / (days.length - 1) : (W - L - R) / 2);
+    const y = v => T + (H - T - B) * (1 - v);
+    const el = (tag, attrs, text) => {
+      const e = document.createElementNS(SVGNS, tag);
+      for (const k in attrs) e.setAttribute(k, attrs[k]);
+      if (text != null) e.textContent = text;
+      return e;
+    };
+    const svg = el('svg', {viewBox: `0 0 ${W} ${H}`, class: 'accuracy-svg', role: 'img', 'aria-label': '每日正确率折线图'});
+    [0, 0.5, 1].forEach(v => {
+      svg.appendChild(el('line', {x1: L, x2: W - R, y1: y(v), y2: y(v), class: 'acc-grid'}));
+      svg.appendChild(el('text', {x: L - 6, y: y(v) + 3, class: 'acc-axis', 'text-anchor': 'end'}, Math.round(v * 100) + '%'));
+    });
+    const line = (field, cls) => {
+      let path = '';
+      days.forEach((d, i) => {
+        if (d[field] == null) return;
+        path += (i > 0 && days[i - 1][field] != null ? 'L' : 'M') + x(i).toFixed(1) + ' ' + y(d[field]).toFixed(1);
+      });
+      if (path) svg.appendChild(el('path', {d: path, class: cls}));
+    };
+    line('soft', 'acc-line-loose');
+    line('ok', 'acc-line');
+    days.forEach((d, i) => {
+      const isToday = i === days.length - 1;
+      if (d.ok != null) {
+        const dot = el('circle', {cx: x(i), cy: y(d.ok), r: isToday ? 5 : 3, class: isToday ? 'acc-dot is-today' : 'acc-dot'});
+        dot.appendChild(el('title', {}, `${d.key.slice(5)}：${Math.round(d.ok * 100)}%（${d.n} 题）`));
+        svg.appendChild(dot);
+        if (isToday) svg.appendChild(el('text', {x: x(i), y: y(d.ok) - 9, class: 'acc-today-val', 'text-anchor': 'end'}, Math.round(d.ok * 100) + '%'));
+      }
+      const showDate = isToday || (days.length - 1 - i) % 2 === 0 && days.length - 1 - i >= 2;
+      if (showDate) svg.appendChild(el('text', {x: x(i), y: H - 24, class: isToday ? 'acc-axis is-today' : 'acc-axis', 'text-anchor': 'middle'}, isToday ? '今天' : d.key.slice(5)));
+      svg.appendChild(el('text', {x: x(i), y: H - 8, class: isToday ? 'acc-count is-today' : 'acc-count', 'text-anchor': 'middle'}, d.n || ''));
+    });
+    box.replaceChildren(svg);
   }
 
   function renderMocksList() {
