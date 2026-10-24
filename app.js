@@ -1555,7 +1555,7 @@
       const d = byDay[key];
       days.push({key, n: d ? d.n : 0, ok: d ? d.ok / d.n : null, soft: d ? d.soft / d.n : null});
     }
-    const W = 420, H = 210, L = 34, R = 12, T = 22, B = 44;
+    const W = 420, H = 222, L = 34, R = 12, T = 22, B = 56;
     const x = i => L + (days.length > 1 ? (W - L - R) * i / (days.length - 1) : (W - L - R) / 2);
     const y = v => T + (H - T - B) * (1 - v);
     const el = (tag, attrs, text) => {
@@ -1585,11 +1585,16 @@
         const dot = el('circle', {cx: x(i), cy: y(d.ok), r: isToday ? 5 : 3, class: isToday ? 'acc-dot is-today' : 'acc-dot'});
         dot.appendChild(el('title', {}, `${d.key.slice(5)}：${Math.round(d.ok * 100)}%（${d.n} 题）`));
         svg.appendChild(dot);
-        if (isToday) svg.appendChild(el('text', {x: x(i), y: y(d.ok) - 9, class: 'acc-today-val', 'text-anchor': 'end'}, Math.round(d.ok * 100) + '%'));
+        if (isToday) {
+          // Keep the label off the line: below the dot when the line comes down from above, else above
+          const prev = days.slice(0, i).reverse().find(p => p.ok != null);
+          const below = prev && prev.ok > d.ok;
+          svg.appendChild(el('text', {x: x(i), y: y(d.ok) + (below ? 17 : -9), class: 'acc-today-val', 'text-anchor': 'end'}, Math.round(d.ok * 100) + '%'));
+        }
       }
       const showDate = isToday || (days.length - 1 - i) % 2 === 0 && days.length - 1 - i >= 2;
-      if (showDate) svg.appendChild(el('text', {x: x(i), y: H - 24, class: isToday ? 'acc-axis is-today' : 'acc-axis', 'text-anchor': 'middle'}, isToday ? '今天' : d.key.slice(5)));
-      svg.appendChild(el('text', {x: x(i), y: H - 8, class: isToday ? 'acc-count is-today' : 'acc-count', 'text-anchor': 'middle'}, d.n || ''));
+      if (showDate) svg.appendChild(el('text', {x: x(i), y: H - 26, class: isToday ? 'acc-axis is-today' : 'acc-axis', 'text-anchor': 'middle'}, isToday ? '今天' : d.key.slice(5)));
+      svg.appendChild(el('text', {x: x(i), y: H - 9, class: isToday ? 'acc-count is-today' : 'acc-count', 'text-anchor': 'middle'}, d.n || ''));
     });
     box.replaceChildren(svg);
   }
