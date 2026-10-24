@@ -3898,3 +3898,20 @@ h1, h2, h3, h4,
 .mock-spark { flex: none; }
 
 .expl-ai-tag { display: inline-block; margin-right: 6px; padding: 0 6px; border: 1px solid currentColor; border-radius: 4px; font-size: 11px; opacity: .65; }
+
+/* ─── 每日正确率曲线 ─── */
+.accuracy-card { margin-bottom: 14px; }
+.accuracy-chart { max-width: 560px; }
+.accuracy-svg { display: block; width: 100%; height: auto; overflow: visible; }
+.acc-grid { stroke: var(--hairline); stroke-width: 1; }
+.acc-axis, .acc-count, .acc-today-val { font-size: 10px; fill: var(--text-muted); }
+.acc-count { font-size: 9px; }
+.acc-axis.is-today, .acc-count.is-today, .acc-today-val { fill: var(--primary); font-weight: 600; }
+.acc-today-val { font-size: 12px; }
+.acc-line { fill: none; stroke: var(--ink); stroke-width: 2; stroke-linejoin: round; stroke-linecap: round; }
+.acc-line-loose { fill: none; stroke: var(--text-muted); opacity: 0.45; stroke-width: 1; }
+.acc-dot { fill: var(--ink); }
+.acc-dot.is-today { fill: var(--primary); }
+.chart-legend .lg-acc::before { background: var(--ink); height: 2px; vertical-align: 3px; }
+.chart-legend .lg-acc-loose::before { background: var(--text-muted); opacity: 0.45; height: 1px; vertical-align: 4px; }
+.accuracy-note { margin-top: 6px; }

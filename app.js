@@ -1501,6 +1501,7 @@
     }
 
     renderHistoryChart();
+    renderAccuracyChart();
     renderMocksList();
   }
 
@@ -1529,6 +1530,73 @@
       `;
       chart.appendChild(col);
     });
+  }
+
+  // Daily accuracy curve: same buckets and ownership rule as buildAtriReport (again = wrong, hard = fuzzy, else right)
+  function renderAccuracyChart() {
+    const box = $('#accuracyChart');
+    if (!box) return;
+    const SVGNS = 'http://www.w3.org/2000/svg';
+    const myName = window.EJU_SYNC?.myName?.();
+    const byDay = {};
+    for (const h of state.history) {
+      if (h.by && h.by !== myName) continue;
+      const key = tokyoDateKey(h.at || Date.parse(h.date));
+      const d = byDay[key] || (byDay[key] = {n: 0, ok: 0, soft: 0});
+      d.n++;
+      if (h.grade === 'again') continue;
+      d.soft++;
+      if (h.grade !== 'hard') d.ok++;
+    }
+    const days = [];
+    for (let i = 14; i >= 0; i--) {
+      const key = localDateKey(new Date(Date.now() - i * 86400000));
+      if (key < '2026-10-20') continue;
+      const d = byDay[key];
+      days.push({key, n: d ? d.n : 0, ok: d ? d.ok / d.n : null, soft: d ? d.soft / d.n : null});
+    }
+    const W = 420, H = 222, L = 34, R = 12, T = 22, B = 56;
+    const x = i => L + (days.length > 1 ? (W - L - R) * i / (days.length - 1) : (W - L - R) / 2);
+    const y = v => T + (H - T - B) * (1 - v);
+    const el = (tag, attrs, text) => {
+      const e = document.createElementNS(SVGNS, tag);
+      for (const k in attrs) e.setAttribute(k, attrs[k]);
+      if (text != null) e.textContent = text;
+      return e;
+    };
+    const svg = el('svg', {viewBox: `0 0 ${W} ${H}`, class: 'accuracy-svg', role: 'img', 'aria-label': '每日正确率折线图'});
+    [0, 0.5, 1].forEach(v => {
+      svg.appendChild(el('line', {x1: L, x2: W - R, y1: y(v), y2: y(v), class: 'acc-grid'}));
+      svg.appendChild(el('text', {x: L - 6, y: y(v) + 3, class: 'acc-axis', 'text-anchor': 'end'}, Math.round(v * 100) + '%'));
+    });
+    const line = (field, cls) => {
+      let path = '';
+      days.forEach((d, i) => {
+        if (d[field] == null) return;
+        path += (i > 0 && days[i - 1][field] != null ? 'L' : 'M') + x(i).toFixed(1) + ' ' + y(d[field]).toFixed(1);
+      });
+      if (path) svg.appendChild(el('path', {d: path, class: cls}));
+    };
+    line('soft', 'acc-line-loose');
+    line('ok', 'acc-line');
+    days.forEach((d, i) => {
+      const isToday = i === days.length - 1;
+      if (d.ok != null) {
+        const dot = el('circle', {cx: x(i), cy: y(d.ok), r: isToday ? 5 : 3, class: isToday ? 'acc-dot is-today' : 'acc-dot'});
+        dot.appendChild(el('title', {}, `${d.key.slice(5)}：${Math.round(d.ok * 100)}%（${d.n} 题）`));
+        svg.appendChild(dot);
+        if (isToday) {
+          // Keep the label off the line: below the dot when the line comes down from above, else above
+          const prev = days.slice(0, i).reverse().find(p => p.ok != null);
+          const below = prev && prev.ok > d.ok;
+          svg.appendChild(el('text', {x: x(i), y: y(d.ok) + (below ? 17 : -9), class: 'acc-today-val', 'text-anchor': 'end'}, Math.round(d.ok * 100) + '%'));
+        }
+      }
+      const showDate = isToday || (days.length - 1 - i) % 2 === 0 && days.length - 1 - i >= 2;
+      if (showDate) svg.appendChild(el('text', {x: x(i), y: H - 26, class: isToday ? 'acc-axis is-today' : 'acc-axis', 'text-anchor': 'middle'}, isToday ? '今天' : d.key.slice(5)));
+      svg.appendChild(el('text', {x: x(i), y: H - 9, class: isToday ? 'acc-count is-today' : 'acc-count', 'text-anchor': 'middle'}, d.n || ''));
+    });
+    box.replaceChildren(svg);
   }
 
   function renderMocksList() {
@@ -2135,6 +2203,16 @@
     try { return localStorage.getItem(ATRI_TOKEN_KEY) || ''; } catch (_) { return ''; }
   }
 
+  // Questions ATRI can send over QQ and grade: plain 4-choice text MCQs with no figure/passage/paper image, no math decks
+  const QUIZ_BLOCKED_Q = /下線部|次の図|次の表|次のグラフ|次の地図|地図中|図中|表中|グラフ中|上の|下の図|右の|左の|写真|資料/;
+  function isQuizable(card) {
+    if (!card || card.type !== 'mcq' || !Array.isArray(card.choices) || card.choices.length !== 4) return false;
+    if (card.deck === '数Ⅰ·A' || card.deck === '公式') return false;
+    if (card.hasFigure || card.paperImg || (card.passage && String(card.passage).trim())) return false;
+    if (card.choices.some(c => /^\s*[①-⑳]\s*$/.test(String(c)))) return false;
+    return !QUIZ_BLOCKED_Q.test(card.q || '');
+  }
+
   function buildAtriReport() {
     const today = tokyoDateKey(Date.now());
     const myName = window.EJU_SYNC?.myName?.();
@@ -2155,6 +2233,17 @@
         correct++;
       }
     }
+    // Newest strict misses first, one entry per card, for ATRI's bedtime / morning recall quiz
+    const wrongItems = [];
+    const seen = new Set();
+    for (const h of [...mine].sort((x, y) => (y.at || 0) - (x.at || 0))) {
+      if (wrongItems.length >= 6) break;
+      if (h.grade !== 'again' || seen.has(h.id)) continue;
+      seen.add(h.id);
+      const card = cards.find(c => c.id === h.id);
+      if (!isQuizable(card)) continue;
+      wrongItems.push({id: card.id, deck: card.deck, q: String(card.q).replace(/\s+/g, ' ').trim().slice(0, 90)});
+    }
     const weakDeck = Object.entries(wrongByDeck).sort((a, b) => b[1] - a[1])[0]?.[0] || '';
     return {
       date: today,
@@ -2168,6 +2257,7 @@
       solid: cards.filter(c => (getProgress(c).box || 0) >= 3).length,
       total: cards.length,
       weakDeck: weakDeck.slice(0, 20),
+      wrongItems,
     };
   }
 
