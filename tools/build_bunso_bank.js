@@ -21,10 +21,19 @@ for (const file of files) {
   const cards = JSON.parse(fs.readFileSync(filePath, 'utf8'));
   console.log(`Processing ${file}: ${cards.length} cards`);
   
+  let lastPassage = '';
   for (const c of cards) {
     if (!c.id) throw new Error(`${file}: card missing id`);
     if (seenIds.has(c.id)) throw new Error(`Duplicate id: ${c.id}`);
     seenIds.add(c.id);
+
+    if (c.passage === 'SAME_AS_PREV') {
+      c.passage = lastPassage;
+    } else if (c.passage) {
+      lastPassage = c.passage;
+    } else {
+      lastPassage = '';
+    }
 
     if (!Array.isArray(c.choices) || c.choices.length !== 4) {
       throw new Error(`${c.id}: choices must be an array of 4 items`);
@@ -43,7 +52,7 @@ for (const file of files) {
 }
 
 const header = '// EJU 総合科目（文综）历年真题（由 tools/build_bunso_bank.js 从 tools/bunso_src/ 生成，请勿手改）\n'
-  + '// 题面逐字转写自原卷，答案逐题对照官方正解表。\n';
+  + '// 答案逐题对照官方正解表；题面与选项由 AI 转写，尚未人工逐字校对。\n';
 
 const outPath = path.join(ROOT, 'bank_bunso_real.js');
 fs.writeFileSync(outPath, `${header}window.EJU_BANK = (window.EJU_BANK || []).concat(\n${JSON.stringify(allCards, null, 2)}\n);\n`, 'utf8');
