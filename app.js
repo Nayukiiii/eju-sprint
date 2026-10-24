@@ -844,6 +844,7 @@
 
     applyStudyLang(activeCard, studyLangEls());
     renderMathIn($('#view-study'));
+    window.EJU_LADDER_HOOK?.rendered?.(activeCard);
   }
 
   function renderStudyMarkSlots(card) {
@@ -1113,6 +1114,7 @@
     }
 
     $('#studyRateBar').hidden = false;
+    window.EJU_LADDER_HOOK?.feedback?.(activeCard, isCorrect, isUnsure);
     activeCard._lastGradeCorrect = isCorrect && !isUnsure;
     renderMathIn(fb);
   }
@@ -1205,6 +1207,7 @@
       state.activeSession.index = sessionIndex;
     }
     if (sessionIndex >= queue.length) {
+      if (window.EJU_LADDER_HOOK?.sessionEnd?.()) return;
       state.activeSession = null;
       saveState();
       switchRoute('today');
@@ -2167,6 +2170,7 @@
     if (route === 'today') {
       renderDeckProgressGrid();
       renderKnowledgeAccordion();
+      window.EJU_LADDER_HOOK?.today?.();
     } else if (route === 'math') {
       setPeriodMode('math');
       renderTutorCard();
@@ -2912,6 +2916,24 @@
       }
     });
   }
+
+  // 阶梯学习（ladder.js）使用的最小接口
+  window.EJU_APP = {
+    cards,
+    getState: () => state,
+    getProgress,
+    recordCardGrade,
+    switchRoute,
+    getSession: () => ({queue, index: sessionIndex, card: activeCard}),
+    setSession(list, label, index = 0) {
+      queue = list;
+      sessionIndex = index;
+      state.activeSession = {ids: list.map(c => c.id), index, label};
+      saveState();
+      switchRoute('study');
+      renderStudyCard();
+    }
+  };
 
   init();
   bindAtriReporting();
