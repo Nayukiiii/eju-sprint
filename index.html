@@ -128,15 +128,18 @@
           </div>
           <div class="mini-bar mini-bar-ok"><span id="statAccuracyBar" style="width:0%"></span></div>
         </div>
-        <div class="stat-item stat-clickable" id="statMasteryBox" title="点击查看17天方案与各科联动进度">
-          <div class="stat-label">题库总掌握率</div>
-          <div class="stat-val-row">
-            <strong class="stat-val stat-val-ok" id="statMasteryPct">0%</strong>
-            <span class="stat-sub" id="statMasterySub">0 / 0 题</span>
-          </div>
-          <div class="mini-bar mini-bar-ok"><span id="statMasteryBar" style="width:0%"></span></div>
-        </div>
       </div>
+
+      <!-- 三档进度：基础题 / 真题各一条，四段加起来等于该档题数 -->
+      <article class="card tier-card" id="tierCard">
+        <div class="tier-head">
+          <h2 class="section-title">我的进度</h2>
+          <span class="tier-totals"><span id="tierCorrectTotal">累计答对 0 题</span><span id="tierStreak">连续刷题 0 天</span></span>
+        </div>
+        <div class="tier-row" id="tierBasic"></div>
+        <div class="tier-row" id="tierReal"></div>
+        <div class="tier-legend"><i class="tl-ok"></i>记住了<i class="tl-mid"></i>记忆中<i class="tl-bad"></i>弱点<i class="tl-new"></i>没做过</div>
+      </article>
 
       <!-- 刷题控制台：分科掌握度选择 + 一键开刷 -->
       <article class="card practice-console">

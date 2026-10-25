@@ -413,6 +413,60 @@
     return streak;
   }
 
+  // Four-tier split of a pool: 记住了 / 记忆中 / 弱点 / 没做过. Each card lands in exactly one tier.
+  // 记住了 uses the same box>=2 rule as isMastered, minus its 已核实 gate (self-written cards are all 未核实 and would never fill the bar)
+  function tierCounts(pool) {
+    const t = {ok: 0, mid: 0, bad: 0, fresh: 0, total: pool.length};
+    for (const c of pool) {
+      if (isLearned(c)) t.ok++;
+      else if (isWrong(c)) t.bad++;
+      else if (isPracticed(c)) t.mid++;
+      else t.fresh++;
+    }
+    return t;
+  }
+
+  const isMineEntry = h => !h.by || h.by === window.EJU_SYNC?.myName?.();
+  const histMs = h => h.at || Date.parse(h.date);
+
+  // Same ownership and grade rule as buildAtriReport: my entries, anything but 'again' counts as answered right
+  function correctTotalMine() {
+    return state.history.filter(h => isMineEntry(h) && h.grade !== 'again').length;
+  }
+
+  // Consecutive Tokyo days with at least one of my entries, counted back from today (or yesterday if today is still empty)
+  function practiceStreakMine() {
+    const days = new Set(state.history.filter(isMineEntry).map(h => localDateKey(new Date(histMs(h)))));
+    let streak = 0;
+    for (let i = 0; i < 400; i++) {
+      if (days.has(localDateKey(new Date(Date.now() - i * 86400000)))) streak++;
+      else if (i > 0) break;
+    }
+    return streak;
+  }
+
+  function renderTierProgress() {
+    const box = $('#tierCard');
+    if (!box) return;
+    const bunso = cards.filter(c => BUNSO_DECKS.includes(c.deck));
+    const rows = [
+      ['#tierBasic', '基础题', bunso.filter(c => !isRealCard(c))],
+      ['#tierReal', '真题', bunso.filter(isRealCard)]
+    ];
+    for (const [sel, label, pool] of rows) {
+      const t = tierCounts(pool);
+      const w = n => t.total ? (n / t.total * 100).toFixed(2) : 0;
+      $(sel).innerHTML = `
+        <div class="tier-name"><strong>${label}</strong><span>${t.total} 题</span></div>
+        <div class="tier-bar" role="img" aria-label="${label}：记住 ${t.ok}，记忆中 ${t.mid}，弱点 ${t.bad}，没做过 ${t.fresh}">
+          <i class="tl-ok" style="width:${w(t.ok)}%"></i><i class="tl-mid" style="width:${w(t.mid)}%"></i><i class="tl-bad" style="width:${w(t.bad)}%"></i><i class="tl-new" style="width:${w(t.fresh)}%"></i>
+        </div>
+        <div class="tier-nums"><span>记住 <b>${t.ok}</b></span><span>记忆中 <b>${t.mid}</b></span><span>弱点 <b>${t.bad}</b></span><span>没做过 <b>${t.fresh}</b></span></div>`;
+    }
+    $('#tierCorrectTotal').textContent = `累计答对 ${correctTotalMine()} 题`;
+    $('#tierStreak').textContent = `连续刷题 ${practiceStreakMine()} 天`;
+  }
+
   function langHelpCards() {
     return Object.entries(state.langHelp || {})
       .map(([id, v]) => ({card: cards.find(c => c.id === id), ...v}))
@@ -445,10 +499,6 @@
     const todayStats = getTodayStats();
     const dueCount = cards.filter(isDue).length;
     const wrongCount = cards.filter(isWrong).length;
-    const verifiedPool = cards.filter(isCountedForMastery);
-    const unverifiedCount = cards.length - verifiedPool.length;
-    const masteredCount = verifiedPool.filter(isMastered).length;
-    const masteryPct = verifiedPool.length ? Math.round((masteredCount / verifiedPool.length) * 100) : 0;
     const tutorBookmarkCount = cards.filter(c => isMathCard(c) && (isBookmarked(c) || isWrong(c))).length;
 
     $('#statTodayCount').textContent = todayStats.total >= DAILY_TARGET ? `已完成 ✓ (${todayStats.total}/${DAILY_TARGET})` : `${todayStats.total} / ${DAILY_TARGET}`;
@@ -458,9 +508,7 @@
     $('#statDueCount').textContent = String(dueCount);
     $('#statWrongCount').textContent = String(wrongCount);
     if ($('#heroWrongVal')) $('#heroWrongVal').textContent = String(wrongCount);
-    $('#statMasteryPct').textContent = `${masteryPct}%`;
-    $('#statMasterySub').textContent = `已核实 ${masteredCount}/${verifiedPool.length} (未核实${unverifiedCount}不计)`;
-    $('#statMasteryBar').style.width = `${masteryPct}%`;
+    renderTierProgress();
 
     if ($('#statAccuracyPct')) {
       const hasLogs = todayStats.total > 0;
@@ -2519,7 +2567,6 @@
       else startCustomPoolSession(getFilteredPoolBySelectedDeck(), '智能刷题', 20, {mixReal: true});
     });
     $('#statWrongBox').addEventListener('click', () => switchRoute('wrong'));
-    $('#statMasteryBox').addEventListener('click', () => switchRoute('plan'));
 
     // Practice console buttons
     // Hero: continue an unfinished round, otherwise today's mix (due → wrong → unmastered) from all subjects
