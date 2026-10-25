@@ -3297,7 +3297,7 @@
   }
 
   // 阶梯学习（ladder.js）使用的最小接口
-  window.EJU_APP = {
+  Object.assign(window.EJU_APP, {
     cards,
     getState: () => state,
     getProgress,
@@ -3314,7 +3314,7 @@
       switchRoute('study');
       renderStudyCard();
     }
-  };
+  });
 
   init();
   bindAtriReporting();
