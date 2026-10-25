@@ -4032,3 +4032,30 @@ sup.ul-n { font-size: 10px; font-weight: 700; margin-left: 1px; color: var(--acc
 @media (max-width: 560px) {
   .acc-axis, .acc-count, .acc-today-val, .acc-count { font-size: 14.2px; }
 }
+
+/* ── 数学题面：小问分行、空格方框 ── */
+.q-brk { display: block; height: 8px; }
+.q-no { color: var(--accent, #b3503b); margin-right: 2px; }
+.q-blank { display: inline-block; min-width: 1.6em; padding: 0 5px; margin: 0 1px; border: 1.5px solid var(--text-muted); border-radius: 4px; text-align: center; font-weight: 600; font-size: .9em; line-height: 1.4; }
+.katex .fbox { border-width: 1.5px; padding: 0 .25em; }
+
+/* ── 解法卡（题面上方，可折叠）与公式卡答案里的流程 ── */
+.mcard-slot { margin: 0 0 10px; }
+.mcard { border: 1px solid var(--border); border-left: 3px solid var(--accent, #b3503b); border-radius: var(--radius, 10px); background: var(--surface); padding: 2px 12px 10px; margin-bottom: 8px; font-size: 14px; line-height: 1.7; }
+.mcard > summary { cursor: pointer; min-height: 40px; display: flex; align-items: center; gap: 8px; font-weight: 600; list-style: none; }
+.mcard > summary::-webkit-details-marker { display: none; }
+.mcard > summary::after { content: '▾'; margin-left: auto; color: var(--text-muted); }
+.mcard:not([open]) > summary::after { content: '▸'; }
+.mc-tag { font-size: 12px; font-weight: 600; padding: 1px 6px; border-radius: 4px; background: var(--navy-soft, #e6ebf3); color: var(--navy, #2c4a73); white-space: nowrap; }
+.mc-use { margin: 2px 0 6px; color: var(--text-muted); }
+.mc-steps { margin: 0 0 6px; padding-left: 1.3em; }
+.mc-steps li { margin: 2px 0; }
+.mc-formulas { display: flex; flex-wrap: wrap; gap: 6px 10px; margin: 4px 0 6px; }
+.mc-f { padding: 2px 8px; border-radius: 6px; background: var(--navy-soft, #e6ebf3); overflow-x: auto; max-width: 100%; }
+.mc-traps { margin: 0 0 4px; padding-left: 1.3em; color: var(--danger, #b3503b); }
+.mc-ex { margin: 6px 0 0; padding-top: 6px; border-top: 1px dashed var(--border); }
+.mc-flow { margin-top: 8px; font-size: 14px; line-height: 1.7; }
+.mc-flow > summary { cursor: pointer; min-height: 40px; display: flex; align-items: center; font-weight: 600; color: var(--accent, #b3503b); }
+.hw-miss { margin: 8px 0 0; padding: 8px 10px; border-radius: 8px; background: var(--mustard-soft, #fbf1d6); font-size: 14px; line-height: 1.6; }
+.hw-miss b { display: block; margin-bottom: 2px; }
+.mcard, .mc-f, .hw-miss { overflow-wrap: anywhere; }
