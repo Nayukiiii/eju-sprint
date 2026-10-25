@@ -1765,110 +1765,90 @@
 
     $('#planTodaySummaryTag').textContent = `今日已完成 ${doneCount} / ${taskDefs.length} 项`;
 
-    // 4-Stage Roadmap linked to actual deck mastery
-    const stageDefs = [
-      {
-        start: '2026-10-22',
-        end: '2026-10-25',
-        title: '第 1 阶段（10/22 - 10/25）：日本政治·条约通刷 & 数学二次函数保底',
-        desc: '下午拿稳文综分值最高的【日本政治 + 条约】；晚上女朋友讲透【数与式 + 二次函数配方与最值】（占数学卷面40%）。',
-        modules: [
-          {label: '日本政治', filter: c => c.deck === '政治'},
-          {label: '条约对比', filter: c => c.deck === '条約'},
-          {label: '数学·二次函数与数式', filter: c => isMathCard(c) && (c.mtype ? ['quad', 'expr', 'ineq'].includes(c.mtype) : /2次|数と式|因数|命題/.test(`${c.topic} ${c.q}`))}
-        ]
-      },
-      {
-        start: '2026-10-26',
-        end: '2026-10-30',
-        title: '第 2 阶段（10/26 - 10/30）：地理统计·宏观经济 & 数学三角几何·概率整数',
-        desc: '下午攻克【柯本气候/农矿统计 + 日银财政汇率】；晚上用讲题台攻克【余弦/正弦/内切圆 + 双骰子概率与整数】。',
-        modules: [
-          {label: '地理与统计', filter: c => c.deck === '地理'},
-          {label: '宏观经济', filter: c => c.deck === '経済'},
-          {label: '数学·三角几何与概率整数', filter: c => isMathCard(c) && (c.mtype ? ['geo', 'prob', 'int'].includes(c.mtype) : /図形|三角|余弦|正弦|確率|場合|整数/.test(`${c.topic} ${c.q}`))}
-        ]
-      },
-      {
-        start: '2026-10-31',
-        end: '2026-11-04',
-        title: '第 3 阶段（10/31 - 11/04）：变形题专项特训 & 近 5 年数学真题原卷演练',
-        desc: '集中清理所有【变形特训题】与【历史·现代社会】；晚上在讲题台直接用 2021-2025 真题原卷练每道大题前(1)问。',
-        modules: [
-          {label: '变形题与真题特训', filter: isVariantCard},
-          {label: '近现代历史', filter: c => c.deck === '歴史'},
-          {label: '现代社会', filter: c => c.deck === '社会'}
-        ]
-      },
-      {
-        start: '2026-11-05',
-        end: '2026-11-07',
-        title: '第 4 阶段（11/05 - 11/07）：错题本清零 + 时事与旧地名收官',
-        desc: '考前3天不碰偏题难题，把错题本连对2次全部销号，通读速查表中的时事与旧地名，稳住心态上考场。',
-        modules: [
-          {label: '时事热点', filter: c => c.deck === '時事'},
-          {label: '旧地名与首都', filter: c => c.deck === '旧地名'},
-          {label: '数学真题总复盘', filter: c => /数/.test(c.deck)}
-        ]
-      }
-    ];
-
-    const phasesContainer = $('#phasesLinkedList');
-    phasesContainer.innerHTML = '';
-
-    for (const st of stageDefs) {
-      const isCurrent = today >= st.start && today <= st.end;
-      // Plan progress counts every question (verified or not): "done" = answered at least once,
-      // "learned" = answered right on two different days (box ≥ 2). 掌握率 elsewhere still counts only verified ones.
-      const allStageCards = cards.filter(c => st.modules.some(m => m.filter(c)));
-      const stageDone = allStageCards.filter(isPracticed).length;
-      const stageLearned = allStageCards.filter(isLearned).length;
-      const stagePct = allStageCards.length ? Math.round((stageDone / allStageCards.length) * 100) : 0;
-
-      const cardEl = document.createElement('div');
-      cardEl.className = `phase-card${isCurrent ? ' is-current' : ''}`;
-      cardEl.innerHTML = `
-        <div class="phase-head">
-          <span class="phase-title">${st.title}</span>
-          <span class="tag${isCurrent ? '' : ' tag-subtle'}">${isCurrent ? '当前阶段' : `${st.start} ~ ${st.end}`} · 做过 ${stagePct}%（${stageDone}/${allStageCards.length}）· 掌握 ${stageLearned}</span>
-        </div>
-        <p class="phase-desc">${st.desc}</p>
-        <div class="phase-modules-grid"></div>
-      `;
-
-      const grid = cardEl.querySelector('.phase-modules-grid');
-      for (const mod of st.modules) {
-        const pool = cards.filter(mod.filter);
-        const done = pool.filter(isPracticed).length;
-        const learned = pool.filter(isLearned).length;
-        const unmastered = pool.filter(c => !isLearned(c));
-        const pct = pool.length ? Math.round((done / pool.length) * 100) : 0;
-        const unverified = pool.some(isUnverified);
-
-        const modBox = document.createElement('div');
-        modBox.className = 'phase-mod-box';
-        modBox.innerHTML = `
-          <div class="phase-mod-top">
-            <span>${mod.label}</span>
-            <span>${pct}%</span>
-          </div>
-          <div class="mini-bar mini-bar-ok"><span style="width:${pct}%"></span></div>
-          <div class="phase-mod-foot">
-            <span>做过 ${done}/${pool.length} · 掌握 ${learned}${unverified ? ' · 未核实' : ''}</span>
-            ${pool.length ? `<button class="text-btn" type="button">${unmastered.length ? `去练习 (${unmastered.length})` : '复习本组'}</button>` : ''}
-          </div>
-        `;
-        modBox.querySelector('button')?.addEventListener('click', () => {
-          startCustomPoolSession(unmastered.length ? unmastered : pool, mod.label, 20, {mixReal: true});
-        });
-        grid.appendChild(modBox);
-      }
-      phasesContainer.appendChild(cardEl);
-    }
+    renderPlanDays(today);
 
     renderHistoryChart();
     renderAccuracyChart();
     renderMocksList();
+  }
+
+  // ─── 14 天冲刺计划（10/25 → 11/8）：每天一行，当天高亮，过去的天折叠成一行「已过」 ───
+  // pool: 这一天的练习入口（沿用现有科目与「基础/真题」范围，不另造筛选）；没有 pool 的天只显示文字
+  //   decks 科目，scope all|basic|real，sitting+maxNo 限定回次和题号，limit 题数，wrong 只取错题本，recite 用背题模式，
+  //   route 直接跳页（mockb 文模 / math 数学讲题台 / today 首页）
+  const PLAN_DAYS = [
+    {date: '2026-10-25', title: '10/25 日　经济基础 + 国家与地图', detail: '经济基础概念（供需、财政、货币）和各国位置先过一遍，先修卡为主。',
+      pool: [{label: '开始', decks: ['経済', '地理'], scope: 'basic'}]},
+    {date: '2026-10-26', title: '10/26 一　政治', detail: '三权分立、国会、选举制度、人权。',
+      pool: [{label: '开始', decks: ['政治'], scope: 'all'}]},
+    {date: '2026-10-27', title: '10/27 二　地理', detail: '气候、统计、农业、位置。',
+      pool: [{label: '开始', decks: ['地理'], scope: 'all'}]},
+    {date: '2026-10-28', title: '10/28 三　历史骨架', detail: '近代欧洲 → 两次大战 → 冷战 → 战后日本，先把时间线串起来。',
+      pool: [{label: '开始', decks: ['歴史', '条約'], scope: 'all'}]},
+    {date: '2026-10-29', title: '10/29 四　经济真题 10 道', detail: '只做真题，错的当天看解析、进错题本。',
+      pool: [{label: '开始', decks: ['経済'], scope: 'real', limit: 10}]},
+    {date: '2026-10-30', title: '10/30 五　政治真题 10 道', detail: '只做真题，错的当天看解析、进错题本。',
+      pool: [{label: '开始', decks: ['政治'], scope: 'real', limit: 10}]},
+    {date: '2026-10-31', title: '10/31 六　数学整套 + 地理真题 8 道', detail: '上午数学整套，下午地理真题 8 道。',
+      pool: [{label: '地理真题', decks: ['地理'], scope: 'real', limit: 8}, {label: '数学', route: 'math'}]},
+    {date: '2026-11-01', title: '11/1 日　文综整回模考 #1 + 复盘', detail: '2023 第 1 回，80 分钟，翻译关。做完当天复盘错题。',
+      pool: [{label: '去文模', route: 'mockb'}]},
+    {date: '2026-11-02', title: '11/2 一　历史真题 + 复盘错题', detail: '历史真题 10 道，再把错题本过一遍。',
+      pool: [{label: '历史真题', decks: ['歴史', '条約'], scope: 'real', limit: 10}, {label: '错题', wrong: true}]},
+    {date: '2026-11-03', title: '11/3 二　社会与时事 + 补弱', detail: '社会、时事各过一遍，然后看首页「最弱的考点」补弱。',
+      pool: [{label: '开始', decks: ['社会', '時事'], scope: 'all'}, {label: '补弱', route: 'today'}]},
+    {date: '2026-11-04', title: '11/4 三　文综整回模考 #2', detail: '2024 年整回，限时。',
+      pool: [{label: '去文模', route: 'mockb'}]},
+    {date: '2026-11-05', title: '11/5 四　复盘 + 弱点', detail: '复盘模考错题，用首页「最弱的考点」逐个练。冲刺：用背题模式把错题本里的真题连看一遍。',
+      pool: [{label: '背题：错题真题', scope: 'real', wrong: true, recite: true}, {label: '弱点榜', route: 'today'}]},
+    {date: '2026-11-06', title: '11/6 五　半卷限时 + 背题过错题本', detail: '2025 年前 20 题限时做，再用背题模式过错题本。冲刺：用背题模式把错题本里的真题连看一遍。',
+      pool: [{label: '2025 前 20 题', decks: BUNSO_DECKS, scope: 'real', sitting: '2025', maxNo: 20, limit: 20}, {label: '背题：错题真题', scope: 'real', wrong: true, recite: true}]},
+    {date: '2026-11-07', title: '11/7 六　只看导图和错题本，早睡', detail: '不开新题。导图 + 背题模式过错题本，早睡。冲刺：用背题模式把错题本里的真题连看一遍。',
+      pool: [{label: '背题：错题真题', scope: 'real', wrong: true, recite: true}]},
+    {date: '2026-11-08', title: '11/8 日　考试', detail: '带证件和文具，早点出门。', pool: []}
+  ];
+
+  function planPoolCards(p) {
+    let list = cards.filter(c => !isMathCard(c) && BUNSO_DECKS.includes(c.deck));
+    if (p.decks) list = list.filter(c => p.decks.includes(c.deck));
+    if (p.scope === 'basic') list = list.filter(c => !isRealCard(c));
+    if (p.scope === 'real') list = list.filter(c => isRealCard(c) && (!p.sitting || c.sitting === p.sitting) && (!p.maxNo || c.no <= p.maxNo));
+    if (p.wrong) list = list.filter(isWrong);
+    return list;
+  }
+
+  function runPlanAction(p) {
+    if (p.route) {
+      if (p.route === 'math') setPeriodMode('math');
+      switchRoute(p.route);
+      return;
+    }
+    setPeriodMode('bunso');
+    const list = planPoolCards(p);
+    if (!list.length) {
+      const note = $('#planActionNote');
+      if (note) note.textContent = `「${p.label}」现在没有可做的题（错题本里还没有，或已经全部做完）`;
+      return;
+    }
+    startCustomPoolSession(list, p.label, p.limit || 20, {mixReal: !p.scope || p.scope === 'all', recite: Boolean(p.recite)});
+  }
+
+  function renderPlanDays(today) {
+    const box = $('#phasesLinkedList');
+    box.innerHTML = '<p class="plan-note" id="planActionNote"></p>';
+    for (const d of PLAN_DAYS) {
+      const past = d.date < today;
+      const isToday = d.date === today;
+      const btns = d.pool.map((p, i) => `<button class="btn btn-sm ${i === 0 ? 'btn-primary' : ''}" type="button" data-pi="${i}">${p.label === '开始' ? '开始' : (i === 0 ? '开始：' : '') + p.label}</button>`).join('');
+      const body = `<p class="plan-day-detail">${d.detail}</p>${btns ? `<div class="plan-day-actions">${btns}</div>` : ''}`;
+      const el = document.createElement(past ? 'details' : 'div');
+      el.className = `plan-day${isToday ? ' is-today' : ''}${past ? ' is-past' : ''}`;
+      el.innerHTML = past
+        ? `<summary><span class="plan-day-title">${d.title}</span><span class="tag tag-subtle">已过</span></summary>${body}`
+        : `<div class="plan-day-head"><span class="plan-day-title">${d.title}</span>${isToday ? '<span class="tag">今天</span>' : ''}</div>${body}`;
+      el.querySelectorAll('[data-pi]').forEach(b => b.addEventListener('click', () => runPlanAction(d.pool[Number(b.dataset.pi)])));
+      box.appendChild(el);
+    }
   }
 
   function renderHistoryChart() {
