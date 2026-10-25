@@ -43,8 +43,7 @@
       <button class="nav-tab" data-route="mockb" type="button"><span class="nav-full">文综模考</span><span class="nav-short">文模</span></button>
       <button class="nav-tab" data-route="homework" type="button"><span class="nav-full">作业</span><span class="nav-short">作业</span> <span class="nav-badge" id="navHwBadge" hidden>0</span></button>
       <button class="nav-tab" data-route="wrong" type="button"><span class="nav-full">错题本</span><span class="nav-short">错题</span> <span class="nav-badge" id="navWrongBadge">0</span></button>
-      <button class="nav-tab" data-route="plan" type="button"><span class="nav-full">17天方案</span><span class="nav-short">方案</span> <span class="nav-badge nav-badge-ok" id="navPlanBadge">0%</span></button>
-      <button class="nav-tab" data-route="audit" type="button"><span class="nav-full">阶段1核验报告</span><span class="nav-short">核验</span> <span class="nav-badge nav-badge-ok" id="navAuditBadge"></span></button>
+      <button class="nav-tab" data-route="plan" type="button"><span class="nav-full">14天计划</span><span class="nav-short">方案</span> <span class="nav-badge nav-badge-ok" id="navPlanBadge">0%</span></button>
     </nav>
   </header>
 
@@ -128,15 +127,19 @@
           </div>
           <div class="mini-bar mini-bar-ok"><span id="statAccuracyBar" style="width:0%"></span></div>
         </div>
-        <div class="stat-item stat-clickable" id="statMasteryBox" title="点击查看17天方案与各科联动进度">
-          <div class="stat-label">题库总掌握率</div>
-          <div class="stat-val-row">
-            <strong class="stat-val stat-val-ok" id="statMasteryPct">0%</strong>
-            <span class="stat-sub" id="statMasterySub">0 / 0 题</span>
-          </div>
-          <div class="mini-bar mini-bar-ok"><span id="statMasteryBar" style="width:0%"></span></div>
-        </div>
       </div>
+
+      <!-- 三档进度：基础题 / 真题各一条，四段加起来等于该档题数 -->
+      <article class="card tier-card" id="tierCard">
+        <div class="tier-head">
+          <h2 class="section-title">我的进度</h2>
+          <span class="tier-totals"><span id="tierCorrectTotal">累计答对 0 题</span><span id="tierStreak">连续刷题 0 天</span></span>
+        </div>
+        <div class="tier-row" id="tierBasic"></div>
+        <div class="tier-row" id="tierReal"></div>
+        <div class="tier-legend"><i class="tl-ok"></i>记住了<i class="tl-mid"></i>记忆中<i class="tl-bad"></i>弱点<i class="tl-new"></i>没做过</div>
+        <div class="weak-board" id="weakBoard"></div>
+      </article>
 
       <!-- 刷题控制台：分科掌握度选择 + 一键开刷 -->
       <article class="card practice-console">
@@ -156,6 +159,13 @@
               </div>
             </details>
           </div>
+        </div>
+
+        <!-- 范围筛选：全部 / 基础 / 真题（真题可再选回次） -->
+        <div class="scope-bar" id="scopeBar">
+          <div class="scope-row"><span class="scope-label">范围</span><div class="scope-chips" id="scopeChips"></div></div>
+          <div class="scope-row"><span class="scope-label">背题</span><div class="scope-chips"><button type="button" class="scope-chip" id="reciteToggle" aria-pressed="false">背题模式：关</button><span class="recite-note" id="reciteTodayNote"></span></div></div>
+          <div class="scope-row" id="sittingRow" hidden><span class="scope-label">回次</span><div class="scope-chips" id="sittingChips"></div></div>
         </div>
 
         <!-- 科目进度芯片网格（显示每科掌握率进度条） -->
@@ -685,15 +695,27 @@
 
         <!-- 底部评分/下一题控制栏 -->
         <div class="study-Rate-bar" id="studyRateBar" hidden>
+          <div class="auto-rate" id="autoRate" hidden>
+            <button class="btn btn-primary btn-auto-next" id="autoNextBtn" type="button">下一题 →</button>
+            <p class="auto-note" id="autoNote"></p>
+            <div class="auto-override" id="autoOverride">不同意？<span id="autoOverrideBtns"></span></div>
+          </div>
           <div class="rate-buttons" id="rateButtonsGroup">
             <button class="btn btn-danger-soft" data-rate="again" type="button">没掌握<span class="kbd"> (1)</span></button>
             <button class="btn" data-rate="hard" type="button">模糊<span class="kbd"> (2)</span></button>
             <button class="btn btn-ok" data-rate="good" type="button">掌握<span class="kbd"> (3)</span></button>
           </div>
           <button class="btn btn-sm" id="studyNextVariantBtn" type="button">同考点再练一道</button>
+          <div class="recite-bar" id="reciteBar" hidden>
+            <div class="recite-btns">
+              <button class="btn btn-primary" id="reciteOkBtn" type="button">看懂了</button>
+              <button class="btn" id="reciteAgainBtn" type="button">还要再看</button>
+            </div>
+            <p class="auto-note" id="reciteNote"></p>
+          </div>
         </div>
 
-        <div class="kbd-hint">快捷键：选择题按 <code>1-4</code> · 填空题按 <code>0-9/-</code> · <code>Enter/Space</code> 提交与下一题</div>
+        <div class="kbd-hint">快捷键：选择题按 <code>1-4</code> · 填空题按 <code>0-9/-</code> · <code>Enter/Space</code> 提交与下一题 · 选择题/填空题答完自动判定掌握程度，按 <code>Enter</code> 就是接受</div>
       </article>
     </section>
 
@@ -738,7 +760,7 @@
     </section>
 
     <!-- ═══════════════════════════════════════════════════════════════════
-         视图 5：17天冲刺方案（100% 与刷题数据、错题本、各科掌握率实时联动）
+         视图 5：14 天冲刺计划（100% 与刷题数据、错题本、各科掌握率实时联动）
          ═══════════════════════════════════════════════════════════════════ -->
     <section class="view" id="view-plan">
       <!-- 今日任务实时联动看板 -->
@@ -754,12 +776,12 @@
         <div class="linked-tasks-grid" id="linkedTasksGrid"></div>
       </article>
 
-      <!-- 17天四阶段动态进度表（实时计算每个阶段对应牌组的掌握题数与百分比） -->
+      <!-- 14 天冲刺计划（按天，当天高亮） -->
       <article class="card">
         <div class="section-head">
           <div>
-            <h2 class="section-title">17 天四阶段决战路线图（2026-10-22 &rarr; 11-08）</h2>
-            <p class="section-sub">每个阶段直接绑定题库各模块掌握率，点击右侧按钮直接抽取该阶段未掌握题目</p>
+            <h2 class="section-title">14 天冲刺计划（10/25 &rarr; 11/8）</h2>
+            <p class="section-sub">今天高亮；过去的天折叠成一行，点开还能再练</p>
           </div>
         </div>
 
@@ -1009,6 +1031,7 @@
           <button class="btn btn-sm" id="atriSaveBtn" type="button">保存</button>
         </div>
         <p class="stat-hint" id="atriStatusText"></p>
+        <p class="sync-audit-link"><button class="text-btn" id="auditLinkBtn" type="button" data-route="audit">核验（内部）</button></p>
       </div>
     </div>
   </div>

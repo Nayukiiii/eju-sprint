@@ -1,7 +1,9 @@
 // AI 交叉核验（文综）：用大模型盲答每道総合科目题，与题库答案比对。
 // 支持 DeepSeek / OpenAI 兼容接口（接口地址、模型名都可以自己填）和 Anthropic。
 // API Key 和全部结果只保存在本浏览器；选「经本站中转」时 Key 只是经过你自己的服务器转发，不保存、不写日志。
-import { Anthropic, jsonSchemaOutputFormat } from './vendor/anthropic-sdk.js';
+// vendor/anthropic-sdk.js（约 65KB）只在第一次用 Anthropic 核验 / 测试连接时才加载，不拖慢每次打开页面
+let sdkPromise = null;
+const loadSdk = () => sdkPromise || (sdkPromise = import('./vendor/anthropic-sdk.js').catch(err => { sdkPromise = null; throw err; }));
 
 const KEY_PREFIX = 'eju-ai-key';         // + '-' + provider
 const CFG_STORAGE = 'eju-ai-cfg';
@@ -236,6 +238,7 @@ async function verifyCardOpenAi(cfg, apiKey, card) {
 }
 
 async function verifyCardAnthropic(cfg, apiKey, card) {
+  const {Anthropic, jsonSchemaOutputFormat} = await loadSdk();
   const client = new Anthropic({apiKey, dangerouslyAllowBrowser: true, maxRetries: 3,
     ...(cfg.base !== PROVIDERS.anthropic.base ? {baseURL: cfg.base} : {})});
   const fallbacks = /^claude-(opus|sonnet)/.test(cfg.model);

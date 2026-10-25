@@ -51,6 +51,22 @@
   let periodMode = 'bunso'; // 'bunso' | 'math'
   let currentRoute = 'today';
   let selectedDeck = '全部文综';
+  // 范围筛选（文综模式）：all / basic（基础题，含先修卡）/ real（真题，可再选回次）
+  const SCOPE_KEY = 'eju-scope-v1';
+  const SITTINGS = [['2023_1', '2023-1'], ['2023_2', '2023-2'], ['2024', '2024'], ['2025', '2025']];
+  const scopePref = (() => {
+    try {
+      const v = JSON.parse(localStorage.getItem(SCOPE_KEY));
+      if (v && ['all', 'basic', 'real'].includes(v.scope)) return {scope: v.scope, sitting: v.sitting || 'all'};
+    } catch (_) {}
+    return {scope: 'all', sitting: 'all'};
+  })();
+  const RECITE_KEY = 'eju-recite-v1';
+  let reciteMode = (() => { try { return localStorage.getItem(RECITE_KEY) === '1'; } catch (_) { return false; } })();
+  const reciteOn = () => reciteMode && periodMode === 'bunso';
+  function saveScopePref() {
+    try { localStorage.setItem(SCOPE_KEY, JSON.stringify(scopePref)); } catch (_) {}
+  }
   let currentKnowledgeCat = 'all';
   let wrongFilter = 'all';
   let auditTableFilter = 'all';
@@ -58,9 +74,15 @@
 
   // Active study session state
   let queue = [];
+  // 背题模式：整轮只看「题目 + 正确答案 + 解析」，不作答、不判定、不改进度（只记 state.recited）
+  let sessionRecite = false;
   let sessionIndex = 0;
   let activeCard = null;
   let answered = false;
+  // 自动判定掌握程度用：这张卡出现的时间、答题前有没有用提示/速查表、期间有没有切走页面
+  let cardShownAt = 0;
+  let hintUsed = false;
+  let leftPageDuringCard = false;
 
   // Math Tutoring Station state
   let tutorSource = 'cards'; // 'cards' | 'papers'
@@ -409,6 +431,103 @@
     return streak;
   }
 
+  // Four-tier split of a pool: 记住了 / 记忆中 / 弱点 / 没做过. Each card lands in exactly one tier.
+  // 记住了 uses the same box>=2 rule as isMastered, minus its 已核实 gate (self-written cards are all 未核实 and would never fill the bar)
+  function tierCounts(pool) {
+    const t = {ok: 0, mid: 0, bad: 0, fresh: 0, total: pool.length};
+    for (const c of pool) {
+      if (isLearned(c)) t.ok++;
+      else if (isWrong(c)) t.bad++;
+      else if (isPracticed(c)) t.mid++;
+      else t.fresh++;
+    }
+    return t;
+  }
+
+  const isMineEntry = h => !h.by || h.by === window.EJU_SYNC?.myName?.();
+  const histMs = h => h.at || Date.parse(h.date);
+
+  // Same ownership and grade rule as buildAtriReport: my entries, anything but 'again' counts as answered right
+  function correctTotalMine() {
+    return state.history.filter(h => isMineEntry(h) && h.grade !== 'again').length;
+  }
+
+  // Consecutive Tokyo days with at least one of my entries, counted back from today (or yesterday if today is still empty)
+  function practiceStreakMine() {
+    const days = new Set(state.history.filter(isMineEntry).map(h => localDateKey(new Date(histMs(h)))));
+    let streak = 0;
+    for (let i = 0; i < 400; i++) {
+      if (days.has(localDateKey(new Date(Date.now() - i * 86400000)))) streak++;
+      else if (i > 0) break;
+    }
+    return streak;
+  }
+
+  // 最弱的考点：按概念汇总先修卡 + 标了该概念的真题的作答记录，答过 >= 2 次才排序，按（错 + 模糊）占比从高到低
+  function weakConcepts(limit = 5) {
+    const L = window.EJU_LADDER;
+    if (!L || !L.concepts) return [];
+    const byId = {};
+    for (const h of state.history) {
+      if (!isMineEntry(h)) continue;
+      const s = byId[h.id] || (byId[h.id] = {n: 0, wrong: 0, fuzzy: 0});
+      s.n++;
+      if (h.grade === 'again') s.wrong++;
+      else if (h.grade === 'hard') s.fuzzy++;
+    }
+    const realByConcept = {};
+    for (const [id, v] of Object.entries(L.real || {})) for (const cid of v.concepts || []) (realByConcept[cid] || (realByConcept[cid] = [])).push(id);
+    const out = [];
+    for (const [cid, c] of Object.entries(L.concepts)) {
+      let n = 0, wrong = 0, fuzzy = 0;
+      for (const id of [...(c.cardIds || []), ...(realByConcept[cid] || [])]) {
+        const s = byId[id];
+        if (s) { n += s.n; wrong += s.wrong; fuzzy += s.fuzzy; }
+      }
+      if (n >= 2 && wrong + fuzzy > 0) out.push({cid, title: c.titleCn, n, wrong, fuzzy, rate: (wrong + fuzzy) / n});
+    }
+    return out.sort((a, b) => b.rate - a.rate || b.n - a.n).slice(0, limit);
+  }
+
+  function renderWeakBoard() {
+    const box = $('#weakBoard');
+    if (!box) return;
+    const list = weakConcepts();
+    if (!list.length) {
+      box.innerHTML = '<div class="weak-empty">多做几题，这里会出现你最弱的考点</div>';
+      return;
+    }
+    box.innerHTML = `<div class="weak-title">最弱的考点</div>` + list.map(w => `
+      <div class="weak-row">
+        <span class="weak-name">${escapeHtml(w.title)}</span>
+        <span class="weak-num">错 ${w.wrong}${w.fuzzy ? ` · 模糊 ${w.fuzzy}` : ''} / 答 ${w.n}</span>
+        <button type="button" class="btn btn-sm weak-go" data-cid="${escapeHtml(w.cid)}">练这个考点</button>
+      </div>`).join('');
+  }
+
+  function renderTierProgress() {
+    const box = $('#tierCard');
+    if (!box) return;
+    const bunso = cards.filter(c => BUNSO_DECKS.includes(c.deck));
+    const rows = [
+      ['#tierBasic', '基础题', bunso.filter(c => !isRealCard(c))],
+      ['#tierReal', '真题', bunso.filter(isRealCard)]
+    ];
+    for (const [sel, label, pool] of rows) {
+      const t = tierCounts(pool);
+      const w = n => t.total ? (n / t.total * 100).toFixed(2) : 0;
+      $(sel).innerHTML = `
+        <div class="tier-name"><strong>${label}</strong><span>${t.total} 题</span></div>
+        <div class="tier-bar" role="img" aria-label="${label}：记住 ${t.ok}，记忆中 ${t.mid}，弱点 ${t.bad}，没做过 ${t.fresh}">
+          <i class="tl-ok" style="width:${w(t.ok)}%"></i><i class="tl-mid" style="width:${w(t.mid)}%"></i><i class="tl-bad" style="width:${w(t.bad)}%"></i><i class="tl-new" style="width:${w(t.fresh)}%"></i>
+        </div>
+        <div class="tier-nums"><span>记住 <b>${t.ok}</b></span><span>记忆中 <b>${t.mid}</b></span><span>弱点 <b>${t.bad}</b></span><span>没做过 <b>${t.fresh}</b></span></div>`;
+    }
+    $('#tierCorrectTotal').textContent = `累计答对 ${correctTotalMine()} 题`;
+    $('#tierStreak').textContent = `连续刷题 ${practiceStreakMine()} 天`;
+    renderWeakBoard();
+  }
+
   function langHelpCards() {
     return Object.entries(state.langHelp || {})
       .map(([id, v]) => ({card: cards.find(c => c.id === id), ...v}))
@@ -441,10 +560,6 @@
     const todayStats = getTodayStats();
     const dueCount = cards.filter(isDue).length;
     const wrongCount = cards.filter(isWrong).length;
-    const verifiedPool = cards.filter(isCountedForMastery);
-    const unverifiedCount = cards.length - verifiedPool.length;
-    const masteredCount = verifiedPool.filter(isMastered).length;
-    const masteryPct = verifiedPool.length ? Math.round((masteredCount / verifiedPool.length) * 100) : 0;
     const tutorBookmarkCount = cards.filter(c => isMathCard(c) && (isBookmarked(c) || isWrong(c))).length;
 
     $('#statTodayCount').textContent = todayStats.total >= DAILY_TARGET ? `已完成 ✓ (${todayStats.total}/${DAILY_TARGET})` : `${todayStats.total} / ${DAILY_TARGET}`;
@@ -454,9 +569,7 @@
     $('#statDueCount').textContent = String(dueCount);
     $('#statWrongCount').textContent = String(wrongCount);
     if ($('#heroWrongVal')) $('#heroWrongVal').textContent = String(wrongCount);
-    $('#statMasteryPct').textContent = `${masteryPct}%`;
-    $('#statMasterySub').textContent = `已核实 ${masteredCount}/${verifiedPool.length} (未核实${unverifiedCount}不计)`;
-    $('#statMasteryBar').style.width = `${masteryPct}%`;
+    renderTierProgress();
 
     if ($('#statAccuracyPct')) {
       const hasLogs = todayStats.total > 0;
@@ -493,22 +606,61 @@
     ];
   }
 
+  const scopeMatch = c => {
+    if (periodMode !== 'bunso' || scopePref.scope === 'all') return true;
+    if (scopePref.scope === 'basic') return !isRealCard(c);
+    return isRealCard(c) && (scopePref.sitting === 'all' || c.sitting === scopePref.sitting);
+  };
+
+  function renderScopeBar() {
+    const bar = $('#scopeBar');
+    if (!bar) return;
+    bar.hidden = periodMode !== 'bunso';
+    if (bar.hidden) return;
+    const bunso = cards.filter(c => BUNSO_DECKS.includes(c.deck));
+    const nReal = bunso.filter(isRealCard).length;
+    const chip = (attr, val, label, on) => `<button type="button" class="scope-chip${on ? ' is-active' : ''}" data-${attr}="${val}">${label}</button>`;
+    $('#scopeChips').innerHTML = [
+      ['all', `全部 ${bunso.length}`], ['basic', `基础 ${bunso.length - nReal}`], ['real', `真题 ${nReal}`]
+    ].map(([v, l]) => chip('scope', v, l, scopePref.scope === v)).join('');
+    const showSit = scopePref.scope === 'real';
+    $('#sittingRow').hidden = !showSit;
+    if (showSit) {
+      const realCards = bunso.filter(isRealCard);
+      $('#sittingChips').innerHTML = [['all', `全部回次 ${realCards.length}`], ...SITTINGS.map(([v, l]) => [v, `${l} ${realCards.filter(c => c.sitting === v).length}`])]
+        .map(([v, l]) => chip('sitting', v, l, scopePref.sitting === v)).join('');
+    }
+  }
+
   function renderDeckProgressGrid() {
+    renderScopeBar();
+    renderReciteToggle();
     const deckDefs = getDeckListForMode();
     if (!deckDefs.some(d => d.id === selectedDeck)) {
       selectedDeck = deckDefs[0].id;
     }
 
     $('#consoleTitle').textContent = periodMode === 'bunso' ? '文综分科刷题与掌握进度' : '全科刷题与掌握进度';
-    $('#consoleSub').textContent = `当前：${selectedDeck}（未核实题不计入掌握率）`;
+    const scopeNote = periodMode !== 'bunso' || scopePref.scope === 'all' ? ''
+      : scopePref.scope === 'basic' ? ' · 基础题'
+        : ` · 真题${scopePref.sitting === 'all' ? '' : ' ' + (SITTINGS.find(s => s[0] === scopePref.sitting)?.[1] || '')}`;
+    const poolSize = getFilteredPoolBySelectedDeck().length;
+    $('#consoleSub').textContent = `当前：${selectedDeck}${scopeNote} · ${poolSize} 题${poolSize ? '' : '（这个范围没有题，换一个）'}`;
 
     const container = $('#deckFilterBar');
     container.innerHTML = '';
 
     for (const def of deckDefs) {
-      const pool = cards.filter(def.filter);
+      const pool = cards.filter(def.filter).filter(scopeMatch);
       const total = pool.length;
-      if (total === 0) continue;
+      if (total === 0 && def.id !== selectedDeck) continue;
+      if (total === 0) {
+        const none = document.createElement('div');
+        none.className = 'deck-chip deck-chip-empty is-active';
+        none.textContent = `${def.label}：没有题`;
+        container.appendChild(none);
+        continue;
+      }
       const verifiedPool = pool.filter(isCountedForMastery);
       const unverifiedInPool = total - verifiedPool.length;
       const mastered = verifiedPool.filter(isMastered).length;
@@ -654,7 +806,7 @@
   function getFilteredPoolBySelectedDeck() {
     const defs = getDeckListForMode();
     const found = defs.find(d => d.id === selectedDeck) || defs[0];
-    return cards.filter(found.filter);
+    return cards.filter(found.filter).filter(scopeMatch);
   }
 
   // Official (real) questions vs self-written ones. The self-written cards were drilled first, so they sit in the
@@ -703,12 +855,63 @@
     return picked;
   }
 
+  // 背题队列：错题本里的真题 → 没做过的真题 → 其他错题 → 其余；同一档里先背最久没背过的
+  const reciteable = c => !isMathCard(c) && (c.type === 'mcq' || c.type === 'flip');
+  function reciteQueue(pool, limit = 20) {
+    const rec = state.recited || {};
+    const tier = c => isRealCard(c) ? (isWrong(c) ? 0 : (isPracticed(c) ? 3 : 1)) : (isWrong(c) ? 2 : 3);
+    const shuffled = pool.filter(reciteable).map(c => ({c, r: Math.random()}));
+    shuffled.sort((x, y) => tier(x.c) - tier(y.c) || (rec[x.c.id] || 0) - (rec[y.c.id] || 0) || x.r - y.r);
+    return shuffled.slice(0, limit).map(x => x.c);
+  }
+
+  function reciteToday() {
+    const today = localDateKey();
+    return Object.values(state.recited || {}).filter(ts => localDateKey(new Date(ts)) === today).length;
+  }
+
+  function renderReciteToggle() {
+    const btn = $('#reciteToggle');
+    if (!btn) return;
+    btn.classList.toggle('is-active', reciteMode);
+    btn.setAttribute('aria-pressed', String(reciteMode));
+    btn.textContent = `背题模式：${reciteMode ? '开' : '关'}`;
+    const n = reciteToday();
+    $('#reciteTodayNote').textContent = n ? `今天背题 ${n} 张` : '';
+    const smart = $('#startSmartBtn');
+    if (smart) smart.textContent = reciteOn() ? '开始背题 (20题)' : '开始今日任务 (20题)';
+  }
+
+  // 背题：记下背过的时间；「还要再看」的卡放到队尾再出现一次（同一张最多多出现一次）；不碰 progress / history
+  function reciteAdvance(again) {
+    if (!activeCard) return;
+    if (!state.recited) state.recited = {};
+    state.recited[activeCard.id] = Date.now();
+    if (again && queue.filter(c => c.id === activeCard.id).length < 2) queue.push(activeCard);
+    sessionIndex += 1;
+    if (state.activeSession) {
+      state.activeSession.index = sessionIndex;
+      state.activeSession.ids = queue.map(c => c.id);
+    }
+    if (sessionIndex >= queue.length) {
+      state.activeSession = null;
+      sessionRecite = false;
+      saveState();
+      switchRoute('today');
+      return;
+    }
+    saveState();
+    renderStudyCard();
+  }
+
   function startCustomPoolSession(pool, label, limit = 20, opts = {}) {
-    const picked = prioritizeCards(pool, limit, opts);
+    const picked = opts.recite ? reciteQueue(pool, limit) : prioritizeCards(pool, limit, opts);
     if (!picked.length) return;
     queue = picked;
     sessionIndex = 0;
+    sessionRecite = Boolean(opts.recite);
     state.activeSession = {ids: queue.map(c => c.id), index: 0, label};
+    if (sessionRecite) state.activeSession.recite = true;
     saveState();
     switchRoute('study');
     renderStudyCard();
@@ -721,7 +924,7 @@
   let langMode = localStorage.getItem('eju_lang_mode') || (localStorage.getItem('eju_lang_cn') === 'false' ? 'jp' : 'bi');
   if (!LANG_LABEL[langMode]) langMode = 'bi';
   const revealedCn = new Set(); // cards whose Chinese was opened in 日文优先 mode this session
-  const cnVisible = card => langMode !== 'jp' || revealedCn.has(card.id);
+  const cnVisible = card => sessionRecite || langMode !== 'jp' || revealedCn.has(card.id);
 
   function cycleLangMode() {
     langMode = {bi: 'jp', jp: 'cn', cn: 'bi'}[langMode];
@@ -801,6 +1004,11 @@
       return;
     }
     answered = false;
+    $('#view-study').classList.toggle('is-recite', sessionRecite);
+    $('#reciteBar').hidden = true;
+    cardShownAt = Date.now();
+    hintUsed = false;
+    leftPageDuringCard = document.hidden;
 
     const total = queue.length;
     $('#studyProgressText').textContent = `${sessionIndex + 1} / ${total}`;
@@ -869,7 +1077,33 @@
     const markPanel = $('#studyMarkPanel');
     choicesBox.innerHTML = '';
 
-    if (activeCard.type === 'mark') {
+    if (sessionRecite && activeCard.type === 'mcq') {
+      // 背题：选项只读，正确的那项直接标出来
+      answered = true;
+      choicesBox.hidden = false;
+      flipBar.hidden = true;
+      markPanel.hidden = true;
+      const cnList = Array.isArray(activeCard.choices_cn) ? activeCard.choices_cn : [];
+      activeCard.choices.forEach((choiceText, idx) => {
+        const cnText = chineseAddition(choiceText, cnList[idx]);
+        const main = langMode === 'cn' && cnText ? cnText : choiceText;
+        const sub = langMode === 'cn' ? (cnText ? choiceText : '') : cnText;
+        const cn = sub ? `<span class="choice-cn">${sub}</span>` : '';
+        const btn = document.createElement('button');
+        btn.type = 'button';
+        btn.disabled = true;
+        btn.className = `choice-btn${idx === activeCard.a ? ' is-correct' : ''}`;
+        btn.innerHTML = `<span class="choice-key">${idx + 1}</span><span class="choice-body"><span class="choice-jp">${window.EJU_READ.richHtml(main)}</span>${cn}</span>`;
+        choicesBox.appendChild(btn);
+      });
+      showStudyFeedback(null, mcqAnswerText(activeCard));
+    } else if (sessionRecite && activeCard.type === 'flip') {
+      answered = true;
+      choicesBox.hidden = true;
+      flipBar.hidden = true;
+      markPanel.hidden = true;
+      showStudyFeedback(null, activeCard.back);
+    } else if (activeCard.type === 'mark') {
       // EJU Math authentic Marksheet fill-in [A][B][CD]
       choicesBox.hidden = true;
       flipBar.hidden = true;
@@ -1178,8 +1412,21 @@
     }
 
     $('#studyRateBar').hidden = false;
+    if (sessionRecite) {
+      // 背题：不判定、不评分，只有「看懂了 / 还要再看」
+      $('#autoRate').hidden = true;
+      $('#rateButtonsGroup').style.display = 'none';
+      $('#studyNextVariantBtn').hidden = true;
+      $('#reciteBar').hidden = false;
+      const n = reciteToday();
+      $('#reciteNote').textContent = `背题模式，不记成绩${n ? ` · 今天背题 ${n} 张` : ''}`;
+      renderMathIn(fb);
+      return;
+    }
+    $('#studyNextVariantBtn').hidden = false;
     window.EJU_LADDER_HOOK?.feedback?.(activeCard, isCorrect, isUnsure);
     activeCard._lastGradeCorrect = isCorrect && !isUnsure;
+    applyAutoGrade(isCorrect, isUnsure);
     renderMathIn(fb);
   }
 
@@ -1195,14 +1442,17 @@
     let clearedVariant = Boolean(prev.clearedVariant);
 
     const ok = (grade === 'good' || grade === 'easy') && !isUnsure;
-    if (!ok) {
+    // 模糊（hard）：答对了但没把握（用了提示 / 用时偏长 / 自己点的）。不算答错：不进错题本、不记失误，
+    // 只把掌握档位降一档（最低 1），让它明天就再出现。以前这一档会被当成答错处理，下面那个 hard 分支永远走不到。
+    const soft = grade === 'hard' && !isUnsure;
+    if (soft) {
+      box = Math.max(1, box - 1);
+    } else if (!ok) {
       box = 0;
       lapses += 1;
       inWrongBook = true;
       clearedOriginal = false;
       clearedVariant = false;
-    } else if (grade === 'hard') {
-      box = Math.max(1, box);
     } else {
       box = Math.min(INTERVALS.length - 1, box + 1);
       if (inWrongBook) {
@@ -1258,11 +1508,60 @@
     scheduleAtriReport();
   }
 
+  // ─── 自动判定掌握程度（选择题 / 填空题有对错；翻卡题没有对错，仍然手动三选一）───
+  // 答错或标「不确定」→ 没掌握；答对 → 看有没有用提示/速查表、用时是否明显偏长：没问题记「掌握」，否则记「模糊」。
+  // 用时上限随题目长短变化（读材料要时间）：(40 秒 + 每个字 0.15 秒，最多 180 秒) 的 2 倍，最多 300 秒；中途切走过页面则不按用时降级。
+  function autoGradeFor(card, isCorrect, isUnsure) {
+    if (isCorrect === null || isCorrect === undefined) return null;
+    if (isUnsure || isCorrect === false) {
+      return {grade: 'again', note: isUnsure ? '标了「不确定」，已进错题本' : '答错了，已进错题本'};
+    }
+    const chars = String(card.q || '').length + String(card.passage || '').length
+      + (Array.isArray(card.choices) ? card.choices.join('').length : 0);
+    // 用时只在「慢到离谱」时才降级（正常读日语材料本来就慢）：参考时间的 2 倍，最多 300 秒。
+    // 「模糊」要少用（Anki 的建议：大多数时候按「良好」，「困难」少用），主要靠「用了提示/速查表」来判。
+    const limit = Math.min(300, 2 * Math.min(180, 40 + chars * 0.15));
+    const secs = Math.max(0, Math.round((Date.now() - cardShownAt) / 1000));
+    if (hintUsed) return {grade: 'hard', note: `答对了，但用了提示/速查表（${secs} 秒）`};
+    if (!leftPageDuringCard && secs > limit) return {grade: 'hard', note: `答对了，但用时太长（${secs} 秒，这道题参考 ${Math.round(limit)} 秒内）`};
+    return {grade: 'good', note: `答对了，${secs} 秒，没用提示`};
+  }
+
+  const GRADE_LABEL = {again: '没掌握', hard: '模糊', good: '掌握'};
+
+  function applyAutoGrade(isCorrect, isUnsure) {
+    const auto = autoGradeFor(activeCard, isCorrect, isUnsure);
+    activeCard._auto = auto;
+    const box = $('#autoRate');
+    const manual = $('#rateButtonsGroup');
+    if (!box || !manual) return;
+    if (!auto) {
+      box.hidden = true;
+      manual.style.display = '';
+      return;
+    }
+    box.hidden = false;
+    manual.style.display = 'none';
+    $('#autoNote').innerHTML = `自动记为：<b>${GRADE_LABEL[auto.grade]}</b>（${auto.note}）`;
+    const others = auto.grade === 'again' ? [] : ['good', 'hard', 'again'].filter(g => g !== auto.grade);
+    $('#autoOverride').hidden = !others.length;
+    $('#autoOverrideBtns').innerHTML = others.map(g => `<button type="button" data-override="${g}">改记为${GRADE_LABEL[g]}</button>`).join('');
+    $$('#autoOverrideBtns [data-override]').forEach(btn => {
+      btn.addEventListener('click', () => advanceStudyCard(btn.dataset.override));
+    });
+  }
+
+  const autoOrGood = () => (activeCard && activeCard._auto && activeCard._auto.grade) || 'good';
+
   function advanceStudyCard(rateGrade) {
     if (!activeCard) return;
+    if (sessionRecite) {
+      reciteAdvance(rateGrade === 'again');
+      return;
+    }
     let finalGrade = rateGrade;
-    if (activeCard._lastGradeCorrect === false && rateGrade === 'good') {
-      finalGrade = 'again'; // ensure wrong answers stay in wrong book
+    if (activeCard._lastGradeCorrect === false && rateGrade !== 'again') {
+      finalGrade = 'again'; // 答错的题（含标了「不确定」）一律进错题本，不能被改成掌握/模糊
     }
     recordCardGrade(activeCard, finalGrade);
 
@@ -1466,110 +1765,90 @@
 
     $('#planTodaySummaryTag').textContent = `今日已完成 ${doneCount} / ${taskDefs.length} 项`;
 
-    // 4-Stage Roadmap linked to actual deck mastery
-    const stageDefs = [
-      {
-        start: '2026-10-22',
-        end: '2026-10-25',
-        title: '第 1 阶段（10/22 - 10/25）：日本政治·条约通刷 & 数学二次函数保底',
-        desc: '下午拿稳文综分值最高的【日本政治 + 条约】；晚上女朋友讲透【数与式 + 二次函数配方与最值】（占数学卷面40%）。',
-        modules: [
-          {label: '日本政治', filter: c => c.deck === '政治'},
-          {label: '条约对比', filter: c => c.deck === '条約'},
-          {label: '数学·二次函数与数式', filter: c => isMathCard(c) && (c.mtype ? ['quad', 'expr', 'ineq'].includes(c.mtype) : /2次|数と式|因数|命題/.test(`${c.topic} ${c.q}`))}
-        ]
-      },
-      {
-        start: '2026-10-26',
-        end: '2026-10-30',
-        title: '第 2 阶段（10/26 - 10/30）：地理统计·宏观经济 & 数学三角几何·概率整数',
-        desc: '下午攻克【柯本气候/农矿统计 + 日银财政汇率】；晚上用讲题台攻克【余弦/正弦/内切圆 + 双骰子概率与整数】。',
-        modules: [
-          {label: '地理与统计', filter: c => c.deck === '地理'},
-          {label: '宏观经济', filter: c => c.deck === '経済'},
-          {label: '数学·三角几何与概率整数', filter: c => isMathCard(c) && (c.mtype ? ['geo', 'prob', 'int'].includes(c.mtype) : /図形|三角|余弦|正弦|確率|場合|整数/.test(`${c.topic} ${c.q}`))}
-        ]
-      },
-      {
-        start: '2026-10-31',
-        end: '2026-11-04',
-        title: '第 3 阶段（10/31 - 11/04）：变形题专项特训 & 近 5 年数学真题原卷演练',
-        desc: '集中清理所有【变形特训题】与【历史·现代社会】；晚上在讲题台直接用 2021-2025 真题原卷练每道大题前(1)问。',
-        modules: [
-          {label: '变形题与真题特训', filter: isVariantCard},
-          {label: '近现代历史', filter: c => c.deck === '歴史'},
-          {label: '现代社会', filter: c => c.deck === '社会'}
-        ]
-      },
-      {
-        start: '2026-11-05',
-        end: '2026-11-07',
-        title: '第 4 阶段（11/05 - 11/07）：错题本清零 + 时事与旧地名收官',
-        desc: '考前3天不碰偏题难题，把错题本连对2次全部销号，通读速查表中的时事与旧地名，稳住心态上考场。',
-        modules: [
-          {label: '时事热点', filter: c => c.deck === '時事'},
-          {label: '旧地名与首都', filter: c => c.deck === '旧地名'},
-          {label: '数学真题总复盘', filter: c => /数/.test(c.deck)}
-        ]
-      }
-    ];
-
-    const phasesContainer = $('#phasesLinkedList');
-    phasesContainer.innerHTML = '';
-
-    for (const st of stageDefs) {
-      const isCurrent = today >= st.start && today <= st.end;
-      // Plan progress counts every question (verified or not): "done" = answered at least once,
-      // "learned" = answered right on two different days (box ≥ 2). 掌握率 elsewhere still counts only verified ones.
-      const allStageCards = cards.filter(c => st.modules.some(m => m.filter(c)));
-      const stageDone = allStageCards.filter(isPracticed).length;
-      const stageLearned = allStageCards.filter(isLearned).length;
-      const stagePct = allStageCards.length ? Math.round((stageDone / allStageCards.length) * 100) : 0;
-
-      const cardEl = document.createElement('div');
-      cardEl.className = `phase-card${isCurrent ? ' is-current' : ''}`;
-      cardEl.innerHTML = `
-        <div class="phase-head">
-          <span class="phase-title">${st.title}</span>
-          <span class="tag${isCurrent ? '' : ' tag-subtle'}">${isCurrent ? '当前阶段' : `${st.start} ~ ${st.end}`} · 做过 ${stagePct}%（${stageDone}/${allStageCards.length}）· 掌握 ${stageLearned}</span>
-        </div>
-        <p class="phase-desc">${st.desc}</p>
-        <div class="phase-modules-grid"></div>
-      `;
-
-      const grid = cardEl.querySelector('.phase-modules-grid');
-      for (const mod of st.modules) {
-        const pool = cards.filter(mod.filter);
-        const done = pool.filter(isPracticed).length;
-        const learned = pool.filter(isLearned).length;
-        const unmastered = pool.filter(c => !isLearned(c));
-        const pct = pool.length ? Math.round((done / pool.length) * 100) : 0;
-        const unverified = pool.some(isUnverified);
-
-        const modBox = document.createElement('div');
-        modBox.className = 'phase-mod-box';
-        modBox.innerHTML = `
-          <div class="phase-mod-top">
-            <span>${mod.label}</span>
-            <span>${pct}%</span>
-          </div>
-          <div class="mini-bar mini-bar-ok"><span style="width:${pct}%"></span></div>
-          <div class="phase-mod-foot">
-            <span>做过 ${done}/${pool.length} · 掌握 ${learned}${unverified ? ' · 未核实' : ''}</span>
-            ${pool.length ? `<button class="text-btn" type="button">${unmastered.length ? `去练习 (${unmastered.length})` : '复习本组'}</button>` : ''}
-          </div>
-        `;
-        modBox.querySelector('button')?.addEventListener('click', () => {
-          startCustomPoolSession(unmastered.length ? unmastered : pool, mod.label, 20, {mixReal: true});
-        });
-        grid.appendChild(modBox);
-      }
-      phasesContainer.appendChild(cardEl);
-    }
+    renderPlanDays(today);
 
     renderHistoryChart();
     renderAccuracyChart();
     renderMocksList();
+  }
+
+  // ─── 14 天冲刺计划（10/25 → 11/8）：每天一行，当天高亮，过去的天折叠成一行「已过」 ───
+  // pool: 这一天的练习入口（沿用现有科目与「基础/真题」范围，不另造筛选）；没有 pool 的天只显示文字
+  //   decks 科目，scope all|basic|real，sitting+maxNo 限定回次和题号，limit 题数，wrong 只取错题本，recite 用背题模式，
+  //   route 直接跳页（mockb 文模 / math 数学讲题台 / today 首页）
+  const PLAN_DAYS = [
+    {date: '2026-10-25', title: '10/25 日　经济基础 + 国家与地图', detail: '经济基础概念（供需、财政、货币）和各国位置先过一遍，先修卡为主。',
+      pool: [{label: '开始', decks: ['経済', '地理'], scope: 'basic'}]},
+    {date: '2026-10-26', title: '10/26 一　政治', detail: '三权分立、国会、选举制度、人权。',
+      pool: [{label: '开始', decks: ['政治'], scope: 'all'}]},
+    {date: '2026-10-27', title: '10/27 二　地理', detail: '气候、统计、农业、位置。',
+      pool: [{label: '开始', decks: ['地理'], scope: 'all'}]},
+    {date: '2026-10-28', title: '10/28 三　历史骨架', detail: '近代欧洲 → 两次大战 → 冷战 → 战后日本，先把时间线串起来。',
+      pool: [{label: '开始', decks: ['歴史', '条約'], scope: 'all'}]},
+    {date: '2026-10-29', title: '10/29 四　经济真题 10 道', detail: '只做真题，错的当天看解析、进错题本。',
+      pool: [{label: '开始', decks: ['経済'], scope: 'real', limit: 10}]},
+    {date: '2026-10-30', title: '10/30 五　政治真题 10 道', detail: '只做真题，错的当天看解析、进错题本。',
+      pool: [{label: '开始', decks: ['政治'], scope: 'real', limit: 10}]},
+    {date: '2026-10-31', title: '10/31 六　数学整套 + 地理真题 8 道', detail: '上午数学整套，下午地理真题 8 道。',
+      pool: [{label: '地理真题', decks: ['地理'], scope: 'real', limit: 8}, {label: '数学', route: 'math'}]},
+    {date: '2026-11-01', title: '11/1 日　文综整回模考 #1 + 复盘', detail: '2023 第 1 回，80 分钟，翻译关。做完当天复盘错题。',
+      pool: [{label: '去文模', route: 'mockb'}]},
+    {date: '2026-11-02', title: '11/2 一　历史真题 + 复盘错题', detail: '历史真题 10 道，再把错题本过一遍。',
+      pool: [{label: '历史真题', decks: ['歴史', '条約'], scope: 'real', limit: 10}, {label: '错题', wrong: true}]},
+    {date: '2026-11-03', title: '11/3 二　社会与时事 + 补弱', detail: '社会、时事各过一遍，然后看首页「最弱的考点」补弱。',
+      pool: [{label: '开始', decks: ['社会', '時事'], scope: 'all'}, {label: '补弱', route: 'today'}]},
+    {date: '2026-11-04', title: '11/4 三　文综整回模考 #2', detail: '2024 年整回，限时。',
+      pool: [{label: '去文模', route: 'mockb'}]},
+    {date: '2026-11-05', title: '11/5 四　复盘 + 弱点', detail: '复盘模考错题，用首页「最弱的考点」逐个练。冲刺：用背题模式把错题本里的真题连看一遍。',
+      pool: [{label: '背题：错题真题', scope: 'real', wrong: true, recite: true}, {label: '弱点榜', route: 'today'}]},
+    {date: '2026-11-06', title: '11/6 五　半卷限时 + 背题过错题本', detail: '2025 年前 20 题限时做，再用背题模式过错题本。冲刺：用背题模式把错题本里的真题连看一遍。',
+      pool: [{label: '2025 前 20 题', decks: BUNSO_DECKS, scope: 'real', sitting: '2025', maxNo: 20, limit: 20}, {label: '背题：错题真题', scope: 'real', wrong: true, recite: true}]},
+    {date: '2026-11-07', title: '11/7 六　只看导图和错题本，早睡', detail: '不开新题。导图 + 背题模式过错题本，早睡。冲刺：用背题模式把错题本里的真题连看一遍。',
+      pool: [{label: '背题：错题真题', scope: 'real', wrong: true, recite: true}]},
+    {date: '2026-11-08', title: '11/8 日　考试', detail: '带证件和文具，早点出门。', pool: []}
+  ];
+
+  function planPoolCards(p) {
+    let list = cards.filter(c => !isMathCard(c) && BUNSO_DECKS.includes(c.deck));
+    if (p.decks) list = list.filter(c => p.decks.includes(c.deck));
+    if (p.scope === 'basic') list = list.filter(c => !isRealCard(c));
+    if (p.scope === 'real') list = list.filter(c => isRealCard(c) && (!p.sitting || c.sitting === p.sitting) && (!p.maxNo || c.no <= p.maxNo));
+    if (p.wrong) list = list.filter(isWrong);
+    return list;
+  }
+
+  function runPlanAction(p) {
+    if (p.route) {
+      if (p.route === 'math') setPeriodMode('math');
+      switchRoute(p.route);
+      return;
+    }
+    setPeriodMode('bunso');
+    const list = planPoolCards(p);
+    if (!list.length) {
+      const note = $('#planActionNote');
+      if (note) note.textContent = `「${p.label}」现在没有可做的题（错题本里还没有，或已经全部做完）`;
+      return;
+    }
+    startCustomPoolSession(list, p.label, p.limit || 20, {mixReal: !p.scope || p.scope === 'all', recite: Boolean(p.recite)});
+  }
+
+  function renderPlanDays(today) {
+    const box = $('#phasesLinkedList');
+    box.innerHTML = '<p class="plan-note" id="planActionNote"></p>';
+    for (const d of PLAN_DAYS) {
+      const past = d.date < today;
+      const isToday = d.date === today;
+      const btns = d.pool.map((p, i) => `<button class="btn btn-sm ${i === 0 ? 'btn-primary' : ''}" type="button" data-pi="${i}">${p.label === '开始' ? '开始' : (i === 0 ? '开始：' : '') + p.label}</button>`).join('');
+      const body = `<p class="plan-day-detail">${d.detail}</p>${btns ? `<div class="plan-day-actions">${btns}</div>` : ''}`;
+      const el = document.createElement(past ? 'details' : 'div');
+      el.className = `plan-day${isToday ? ' is-today' : ''}${past ? ' is-past' : ''}`;
+      el.innerHTML = past
+        ? `<summary><span class="plan-day-title">${d.title}</span><span class="tag tag-subtle">已过</span></summary>${body}`
+        : `<div class="plan-day-head"><span class="plan-day-title">${d.title}</span>${isToday ? '<span class="tag">今天</span>' : ''}</div>${body}`;
+      el.querySelectorAll('[data-pi]').forEach(b => b.addEventListener('click', () => runPlanAction(d.pool[Number(b.dataset.pi)])));
+      box.appendChild(el);
+    }
   }
 
   function renderHistoryChart() {
@@ -2451,34 +2730,60 @@
       switchRoute('math');
     });
 
+    // 核验是内部审计页，不放在主导航里，从云同步弹窗底部进入
+    $('#auditLinkBtn')?.addEventListener('click', () => {
+      $('#syncModal').hidden = true;
+      switchRoute('audit');
+    });
+
     // Main nav tabs
     $$('.nav-tab').forEach(tab => {
       tab.addEventListener('click', () => switchRoute(tab.dataset.route));
     });
 
     // Top dashboard clickable boxes
+    $('#reciteToggle').addEventListener('click', () => {
+      reciteMode = !reciteMode;
+      try { localStorage.setItem(RECITE_KEY, reciteMode ? '1' : '0'); } catch (_) {}
+      renderReciteToggle();
+    });
+    $('#reciteOkBtn').addEventListener('click', () => reciteAdvance(false));
+    $('#reciteAgainBtn').addEventListener('click', () => reciteAdvance(true));
+    $('#weakBoard').addEventListener('click', e => {
+      const b = e.target.closest('.weak-go');
+      if (b) window.EJU_LADDER_HOOK?.startConcept?.(b.dataset.cid);
+    });
+    $('#scopeBar').addEventListener('click', e => {
+      const b = e.target.closest('.scope-chip');
+      if (!b) return;
+      if (b.dataset.scope) {
+        scopePref.scope = b.dataset.scope;
+        if (scopePref.scope !== 'real') scopePref.sitting = 'all';
+      } else if (b.dataset.sitting) scopePref.sitting = b.dataset.sitting;
+      saveScopePref();
+      renderDeckProgressGrid();
+    });
     $('#statDueBox').addEventListener('click', () => {
       const duePool = cards.filter(isDue);
       if (duePool.length) startCustomPoolSession(duePool, '到期复习', 25);
-      else startCustomPoolSession(getFilteredPoolBySelectedDeck(), '智能刷题', 20, {mixReal: true});
+      else startCustomPoolSession(getFilteredPoolBySelectedDeck(), '智能刷题', 20, {mixReal: true, recite: reciteOn()});
     });
     $('#statWrongBox').addEventListener('click', () => switchRoute('wrong'));
-    $('#statMasteryBox').addEventListener('click', () => switchRoute('plan'));
 
     // Practice console buttons
     // Hero: continue an unfinished round, otherwise today's mix (due → wrong → unmastered) from all subjects
     $('#heroStartTaskBtn').addEventListener('click', () => {
       if (!$('#resumeSessionBtn').hidden) $('#resumeSessionBtn').click();
-      else startCustomPoolSession(getFilteredPoolBySelectedDeck(), '今日任务', 20, {mixReal: true});
+      else startCustomPoolSession(getFilteredPoolBySelectedDeck(), reciteOn() ? '背题' : '今日任务', 20, {mixReal: true, recite: reciteOn()});
     });
     $('#heroWrongBox').addEventListener('click', () => switchRoute('wrong'));
 
     $('#startSmartBtn').addEventListener('click', () => {
-      startCustomPoolSession(getFilteredPoolBySelectedDeck(), selectedDeck, 20, {mixReal: true});
+      startCustomPoolSession(getFilteredPoolBySelectedDeck(), reciteOn() ? `背题：${selectedDeck}` : selectedDeck, 20, {mixReal: true, recite: reciteOn()});
     });
     $('#startUnmasteredBtn').addEventListener('click', () => {
       const pool = getFilteredPoolBySelectedDeck().filter(c => !isMastered(c));
-      startCustomPoolSession(pool.length ? pool : getFilteredPoolBySelectedDeck(), `${selectedDeck}·未掌握`, 20, {mixReal: true});
+      startCustomPoolSession(pool.length ? pool : getFilteredPoolBySelectedDeck(), `${selectedDeck}·未掌握`, 20, {mixReal: true, recite: reciteOn()});
     });
     $('#startVariantBtn').addEventListener('click', () => {
       const pool = getFilteredPoolBySelectedDeck().filter(isVariantCard);
@@ -2489,6 +2794,7 @@
       const map = new Map(cards.map(c => [c.id, c]));
       queue = state.activeSession.ids.map(id => map.get(id)).filter(Boolean);
       sessionIndex = state.activeSession.index || 0;
+      sessionRecite = Boolean(state.activeSession.recite);
       if (queue.length) {
         switchRoute('study');
         renderStudyCard();
@@ -2516,6 +2822,7 @@
       box.hidden = !box.hidden;
     });
     $('#studyHintBtn').addEventListener('click', () => {
+      if (!answered) hintUsed = true;
       const box = $('#studyHintBox');
       box.hidden = !box.hidden;
       renderMathIn(box);
@@ -2534,6 +2841,7 @@
     });
     $('#studyRefBtn').addEventListener('click', () => {
       if (!activeCard) return;
+      if (!answered) hintUsed = true;
       const kpList = window.EJU_KNOWLEDGE || [];
       const match = findMatchedKp(activeCard);
       if (!match) return;
@@ -2583,6 +2891,8 @@
     $$('#rateButtonsGroup [data-rate]').forEach(btn => {
       btn.addEventListener('click', () => advanceStudyCard(btn.dataset.rate));
     });
+    $('#autoNextBtn')?.addEventListener('click', () => advanceStudyCard(autoOrGood()));
+    document.addEventListener('visibilitychange', () => { if (document.hidden) leftPageDuringCard = true; });
     $('#studyNextVariantBtn').addEventListener('click', () => {
       if (!activeCard) return;
       const sameTopic = cards.filter(c => c.id !== activeCard.id && (c.topic === activeCard.topic || c.deck === activeCard.deck));
@@ -2590,7 +2900,7 @@
       if (nextVar) {
         queue.splice(sessionIndex + 1, 0, nextVar);
       }
-      advanceStudyCard('good');
+      advanceStudyCard(autoOrGood());
     });
 
     // Keyboard shortcuts in Study View
@@ -2627,7 +2937,7 @@
       } else {
         if (e.key === ' ' || e.key === 'Enter' || e.key === '3') {
           e.preventDefault();
-          advanceStudyCard('good');
+          advanceStudyCard(e.key === '3' ? 'good' : autoOrGood());
         } else if (e.key === '1') {
           e.preventDefault();
           advanceStudyCard('again');
@@ -2997,6 +3307,7 @@
     getSession: () => ({queue, index: sessionIndex, card: activeCard}),
     setSession(list, label, index = 0) {
       queue = list;
+      sessionRecite = false;
       sessionIndex = index;
       state.activeSession = {ids: list.map(c => c.id), index, label};
       saveState();

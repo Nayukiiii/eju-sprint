@@ -3939,3 +3939,96 @@ sup.ul-n { font-size: 10px; font-weight: 700; margin-left: 1px; color: var(--acc
 .study-paper-box img { cursor: zoom-in; max-width: 100%; }
 .study-paper-box.is-zoom { max-height: none; }
 .study-paper-box.is-zoom img { cursor: zoom-out; }
+
+/* ─── 答完自动判定掌握程度：只需点「下一题」，不同意再改 ─── */
+.auto-rate { width: 100%; display: flex; flex-direction: column; gap: 6px; }
+.auto-rate[hidden] { display: none; }
+.btn-auto-next { width: 100%; min-height: 48px; font-size: 16px; }
+.auto-note { margin: 0; font-size: 13px; line-height: 1.5; color: var(--text-muted); text-align: center; }
+.auto-note b { color: var(--ink); }
+.auto-override { font-size: 12px; color: var(--text-muted); text-align: center; }
+.auto-override button { border: 0; background: transparent; color: var(--primary); font-size: 13px; padding: 8px 6px; min-height: 36px; cursor: pointer; }
+
+/* ─── Home: three-tier progress ─── */
+.tier-card { padding: 14px 16px; margin-bottom: 16px; }
+.tier-head { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; flex-wrap: wrap; margin-bottom: 10px; }
+.tier-head .section-title { margin: 0; font-size: 16px; }
+.tier-totals { display: flex; gap: 12px; font-size: 13px; color: var(--text-muted); font-weight: 600; }
+.tier-row { margin-bottom: 12px; }
+.tier-name { display: flex; justify-content: space-between; align-items: baseline; font-size: 14px; margin-bottom: 5px; }
+.tier-name span { font-size: 12px; color: var(--text-muted); }
+.tier-bar { display: flex; height: 10px; border-radius: 99px; overflow: hidden; background: var(--surface-subtle); border: 1px solid var(--border); }
+.tier-bar i { display: block; height: 100%; }
+.tl-ok { background: var(--ok); }
+.tl-mid { background: #E0A63E; }
+.tl-bad { background: var(--danger); }
+.tl-new { background: var(--surface-subtle); }
+.tier-nums { display: flex; gap: 12px; flex-wrap: wrap; font-size: 12px; color: var(--text-muted); margin-top: 5px; }
+.tier-nums b { color: var(--text); font-weight: 700; }
+.tier-legend { display: flex; align-items: center; gap: 4px; flex-wrap: wrap; font-size: 11px; color: var(--text-muted); }
+.tier-legend i { display: inline-block; width: 9px; height: 9px; border-radius: 3px; margin-left: 8px; border: 1px solid var(--border); }
+.tier-legend i:first-child { margin-left: 0; }
+
+/* ─── Practice scope filter ─── */
+.scope-bar { margin: 4px 0 12px; display: grid; gap: 8px; }
+.scope-row { display: flex; align-items: center; gap: 8px; }
+.scope-row[hidden] { display: none; }
+.scope-label { font-size: 13px; font-weight: 600; color: var(--text-muted); flex: 0 0 auto; width: 2.6em; }
+.scope-chips { display: flex; gap: 6px; flex-wrap: wrap; }
+.scope-chip { font: inherit; font-size: 14px; padding: 7px 12px; min-height: 40px; border-radius: 99px; border: 1px solid var(--border); background: var(--surface); color: var(--text); cursor: pointer; }
+.scope-chip.is-active { background: var(--primary-soft); border-color: var(--primary); color: var(--primary); font-weight: 700; }
+.deck-chip-empty { grid-column: 1 / -1; font-size: 13px; color: var(--text-muted); }
+
+/* ─── Home: weakest concepts ─── */
+.weak-board { margin-top: 14px; padding-top: 12px; border-top: 1px solid var(--border); }
+.weak-title { font-size: 14px; font-weight: 700; margin-bottom: 6px; }
+.weak-row { display: flex; align-items: center; gap: 8px; padding: 6px 0; }
+.weak-name { flex: 1; min-width: 0; font-size: 14px; font-weight: 600; }
+.weak-num { font-size: 12px; color: var(--text-muted); white-space: nowrap; }
+.weak-go { flex: none; white-space: nowrap; }
+.weak-empty { font-size: 12px; color: var(--text-muted); }
+
+/* ─── Recite mode ─── */
+.recite-note { font-size: 12px; color: var(--text-muted); align-self: center; }
+.recite-bar { width: 100%; }
+.recite-btns { display: flex; gap: 10px; }
+.recite-btns .btn { flex: 1; min-height: 48px; font-size: 16px; }
+#view-study.is-recite #studyHintBtn,
+#view-study.is-recite #studyUnsureBtn,
+#view-study.is-recite .kbd-hint { display: none; }
+#view-study.is-recite .choice-btn { opacity: 1; }
+#view-study.is-recite .choice-btn.is-correct { background: var(--ok-soft); border-color: var(--ok); }
+#view-study.is-recite .choice-btn:not(.is-correct) { opacity: 0.6; }
+.recite-bar .auto-note { text-align: center; margin: 8px 0 0; }
+
+/* ─── 14-day plan ─── */
+.plan-note { margin: 0; font-size: 12px; color: var(--danger); }
+.plan-note:empty { display: none; }
+.plan-day { padding: 12px 14px; border: 1px solid var(--border); border-radius: 8px; background: var(--surface); }
+.plan-day.is-today { border-color: var(--primary); box-shadow: 0 0 0 2px var(--primary-soft); }
+.plan-day.is-past { background: var(--surface-subtle); padding: 8px 14px; }
+.plan-day.is-past summary { display: flex; justify-content: space-between; align-items: center; gap: 8px; cursor: pointer; font-size: 14px; color: var(--text-muted); min-height: 32px; }
+.plan-day.is-past[open] { padding-bottom: 12px; }
+.plan-day-head { display: flex; justify-content: space-between; align-items: center; gap: 8px; }
+.plan-day-title { font-weight: 700; font-size: 15px; }
+.plan-day.is-past .plan-day-title { font-weight: 500; font-size: 14px; }
+.plan-day-detail { margin: 6px 0 8px; font-size: 13px; color: var(--text-muted); }
+.plan-day-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+
+/* ─── Mobile polish: bottom toolbar clearance, tap targets ─── */
+#view-study { padding-bottom: calc(env(safe-area-inset-bottom) + 96px); }
+.sync-audit-link { margin: 14px 0 0; text-align: right; }
+.sync-audit-link .text-btn { font-size: 12px; color: var(--text-muted); }
+
+@media (max-width: 480px) {
+  #syncBtn, #themeBtn, #exitStudyBtn, #studyLangToggleBtn, .nav-tab, .cat-tab, .btn-sm, .btn-xs {
+    min-height: 40px;
+  }
+  #syncBtn, #themeBtn { padding: 8px 10px; }
+  .btn-xs { padding-top: 6px; padding-bottom: 6px; }
+}
+
+/* 方案页正确率图：SVG 按 328/420 缩放，字号放大到渲染后 ≥ 11px */
+@media (max-width: 560px) {
+  .acc-axis, .acc-count, .acc-today-val, .acc-count { font-size: 14.2px; }
+}
