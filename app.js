@@ -8,7 +8,8 @@
   const DAILY_TARGET = 40;
 
   const BUNSO_DECKS = ['政治', '条約', '地理', '経済', '歴史', '社会', '時事', '旧地名'];
-  const MATH_DECKS = ['数Ⅰ·A', '公式'];
+  const MATH_DECKS = ['数Ⅰ·A'];
+  const FORMULA_DECK = '公式'; // 数学1 公式闪卡：flip 题，穿插在文综队列里（method_cards.js）
   const DECK_JP_SUB = {
     '全部文综': '総合科目 全分野',
     '全部': '総合科目 + 数学コース1',
@@ -124,6 +125,9 @@
   function isMathCard(card) {
     return MATH_DECKS.includes(card.deck);
   }
+  const isFormulaCard = card => card.deck === FORMULA_DECK;
+  // 题面/答案里带 $…$ 公式的卡（要走 KaTeX）
+  const usesMathText = card => isMathCard(card) || isFormulaCard(card);
 
   function isVariantCard(card) {
     return card.id.startsWith('var-') || card.id.startsWith('real-') || card.id.includes('-ext-') || Boolean(card.variant);
@@ -405,7 +409,7 @@
       const c = cards.find(x => x.id === h.id);
       if (!c) continue;
       if (isMathCard(c)) mathCount++;
-      else bunsoCount++;
+      else if (!isFormulaCard(c)) bunsoCount++;
       if (h.clearedWrong) wrongCleared++;
       if (h.grade === 'good') correctCount++;
     }
@@ -595,14 +599,16 @@
       return [
         {id: '全部文综', label: '全部文综', filter: c => BUNSO_DECKS.includes(c.deck)},
         ...BUNSO_DECKS.map(d => ({id: d, label: d, filter: c => c.deck === d})),
-        {id: '变形特训', label: '变形题特训', filter: c => !isMathCard(c) && isVariantCard(c)}
+        {id: '变形特训', label: '变形题特训', filter: c => !isMathCard(c) && isVariantCard(c)},
+        {id: FORMULA_DECK, label: '数学公式', filter: isFormulaCard}
       ];
     }
     return [
       {id: '全部', label: '全科总览', filter: () => true},
       {id: '数Ⅰ·A', label: '数学コース1 (已核实)', filter: c => c.deck === '数Ⅰ·A'},
       ...BUNSO_DECKS.map(d => ({id: d, label: d, filter: c => c.deck === d})),
-      {id: '变形特训', label: '真题改编变形题', filter: isVariantCard}
+      {id: '变形特训', label: '真题改编变形题', filter: isVariantCard},
+      {id: FORMULA_DECK, label: '数学公式', filter: isFormulaCard}
     ];
   }
 
@@ -904,8 +910,24 @@
     renderStudyCard();
   }
 
+  // 文综队列里穿插几张数学公式闪卡（到期的、错过的先来，其次没做过的），均匀插在中间，不放第一张
+  function withFormulaCards(picked, count = 3) {
+    if (picked.length < 12 || picked.filter(c => BUNSO_DECKS.includes(c.deck)).length < picked.length * 0.8) return picked;
+    if (periodMode === 'bunso' && scopePref.scope === 'real') return picked;
+    const rank = c => {
+      const p = getProgress(c);
+      return isWrong(c) ? 0 : isDue(c) ? 1 : p.reps === 0 ? 2 : 3 + p.box;
+    };
+    const pool = cards.filter(isFormulaCard).map(c => [c, rank(c) + Math.random() * 0.5]).sort((a, b) => a[1] - b[1]).slice(0, count).map(x => x[0]);
+    if (!pool.length) return picked;
+    const out = [...picked];
+    pool.forEach((c, k) => out.splice(Math.floor(((k + 1) * out.length) / (pool.length + 1)) + k, 0, c));
+    return out;
+  }
+
   function startCustomPoolSession(pool, label, limit = 20, opts = {}) {
-    const picked = opts.recite ? reciteQueue(pool, limit) : prioritizeCards(pool, limit, opts);
+    let picked = opts.recite ? reciteQueue(pool, limit) : prioritizeCards(pool, limit, opts);
+    if (opts.formula && !opts.recite) picked = withFormulaCards(picked);
     if (!picked.length) return;
     queue = picked;
     sessionIndex = 0;
@@ -950,11 +972,13 @@
     const show = cnVisible(card);
     const main = langMode === 'cn' && card.q_cn ? card.q_cn : (card.q || card.q_cn);
     const other = langMode === 'cn' ? card.q : card.q_cn;
-    if (isMathCard(card)) questionEl.textContent = main;
+    if (usesMathText(card)) questionEl.innerHTML = window.EJU_READ.mathQHtml(main);
     else questionEl.innerHTML = window.EJU_READ.richHtml(main);
     if (show && other && other !== main) {
       subEl.hidden = false;
-      subEl.textContent = `${langMode === 'cn' ? '日文原文' : '中文译文'}：${other}`;
+      const subLabel = `${langMode === 'cn' ? '日文原文' : '中文译文'}：`;
+      if (usesMathText(card)) subEl.innerHTML = `${window.EJU_READ.esc(subLabel)}${window.EJU_READ.mathQHtml(other)}`;
+      else subEl.textContent = subLabel + other;
       if (card.cnAI && langMode !== 'cn') {
         const tag = document.createElement('span');
         tag.className = 'expl-ai-tag';
@@ -969,6 +993,18 @@
       const cn = btn.querySelector('.choice-cn');
       if (cn) cn.hidden = !show;
     });
+    // 数学真题：题面上方挂解法卡（折叠状态记在本机）
+    let slot = questionEl.parentElement.querySelector('.mcard-slot');
+    if (isMathCard(card) && window.EJU_METHODS) {
+      if (!slot) {
+        slot = document.createElement('div');
+        slot.className = 'mcard-slot';
+        questionEl.before(slot);
+      }
+      slot.innerHTML = window.EJU_METHODS.htmlFor(card);
+    } else if (slot) {
+      slot.remove();
+    }
     renderMathIn(questionEl.parentElement);
   }
 
@@ -1027,7 +1063,7 @@
     window.EJU_READ.hidePop();
     const geoBtn = $('#studyGeoBtn');
     const geoBox = $('#studyGeoBox');
-    const geoTerms = isMathCard(activeCard) ? [] : window.EJU_READ.geoTerms(activeCard);
+    const geoTerms = usesMathText(activeCard) ? [] : window.EJU_READ.geoTerms(activeCard);
     geoBox.hidden = true;
     geoBox.textContent = '';
     geoBtn.hidden = geoTerms.length === 0;
@@ -1346,7 +1382,8 @@
       statusEl.className = 'feedback-status';
       statusEl.textContent = '参考答案';
       ansEl.hidden = false;
-      ansEl.textContent = answerText;
+      if (isFormulaCard(activeCard)) ansEl.innerHTML = window.EJU_READ.esc(answerText);
+      else ansEl.textContent = answerText;
     }
 
     // 4-Option breakdown: why correct is right, why the 3 incorrect options are wrong
@@ -1368,7 +1405,9 @@
       optExplBox.innerHTML = '';
     }
 
-    if (isMathCard(activeCard)) {
+    if (isFormulaCard(activeCard)) {
+      explEl.innerHTML = window.EJU_METHODS ? window.EJU_METHODS.flowHtml(activeCard) : '';
+    } else if (isMathCard(activeCard)) {
       // Math derivations must be shown in full, one step per line
       explEl.innerHTML = formatMathStepsHtml(activeCard.expl || '按基本公式代入即可。');
     } else {
@@ -1626,7 +1665,7 @@
               </span>
             </div>
           </div>
-          <div class="wrong-item-q">${qText}</div>
+          <div class="wrong-item-q">${usesMathText(c) ? window.EJU_READ.mathQHtml(qText) : qText}</div>
           ${state.hwNotes?.[c.id] ? `<p class="wrong-hw-note">作业「${escapeHtml(state.hwNotes[c.id].title)}」批改：${escapeHtml(state.hwNotes[c.id].comment || (state.hwNotes[c.id].verdict === 'half' ? '半对' : '错'))}</p>` : ''}
           <div class="wrong-item-ans">正确答案：${ansText}</div>
         </div>
@@ -1688,7 +1727,7 @@
         btnText: '去刷文综',
         onAction: () => {
           setPeriodMode('bunso');
-          startCustomPoolSession(cards.filter(c => BUNSO_DECKS.includes(c.deck)), '今日文综冲刺', 30, {mixReal: true});
+          startCustomPoolSession(cards.filter(c => BUNSO_DECKS.includes(c.deck)), '今日文综冲刺', 30, {mixReal: true, formula: true});
         }
       },
       {
@@ -2766,7 +2805,7 @@
     $('#statDueBox').addEventListener('click', () => {
       const duePool = cards.filter(isDue);
       if (duePool.length) startCustomPoolSession(duePool, '到期复习', 25);
-      else startCustomPoolSession(getFilteredPoolBySelectedDeck(), '智能刷题', 20, {mixReal: true, recite: reciteOn()});
+      else startCustomPoolSession(getFilteredPoolBySelectedDeck(), '智能刷题', 20, {mixReal: true, formula: true, recite: reciteOn()});
     });
     $('#statWrongBox').addEventListener('click', () => switchRoute('wrong'));
 
@@ -2774,12 +2813,12 @@
     // Hero: continue an unfinished round, otherwise today's mix (due → wrong → unmastered) from all subjects
     $('#heroStartTaskBtn').addEventListener('click', () => {
       if (!$('#resumeSessionBtn').hidden) $('#resumeSessionBtn').click();
-      else startCustomPoolSession(getFilteredPoolBySelectedDeck(), reciteOn() ? '背题' : '今日任务', 20, {mixReal: true, recite: reciteOn()});
+      else startCustomPoolSession(getFilteredPoolBySelectedDeck(), reciteOn() ? '背题' : '今日任务', 20, {mixReal: true, formula: true, recite: reciteOn()});
     });
     $('#heroWrongBox').addEventListener('click', () => switchRoute('wrong'));
 
     $('#startSmartBtn').addEventListener('click', () => {
-      startCustomPoolSession(getFilteredPoolBySelectedDeck(), reciteOn() ? `背题：${selectedDeck}` : selectedDeck, 20, {mixReal: true, recite: reciteOn()});
+      startCustomPoolSession(getFilteredPoolBySelectedDeck(), reciteOn() ? `背题：${selectedDeck}` : selectedDeck, 20, {mixReal: true, formula: true, recite: reciteOn()});
     });
     $('#startUnmasteredBtn').addEventListener('click', () => {
       const pool = getFilteredPoolBySelectedDeck().filter(c => !isMastered(c));

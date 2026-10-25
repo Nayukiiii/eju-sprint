@@ -249,7 +249,8 @@
     const verdict = graded ? g.verdict : null;
     let question;
     if (card) {
-      question = `<div class="hw-q">${esc(card.q)}</div>${card.q_cn ? `<div class="hw-q-cn">${esc(card.q_cn)}</div>` : ''}`;
+      const fmt = card.deck === '数Ⅰ·A' && window.EJU_READ?.mathQHtml ? window.EJU_READ.mathQHtml : esc;
+      question = `${card.deck === '数Ⅰ·A' ? window.EJU_METHODS?.htmlFor(card) || '' : ''}<div class="hw-q">${fmt(card.q)}</div>${card.q_cn ? `<div class="hw-q-cn">${fmt(card.q_cn)}</div>` : ''}`;
     } else {
       question = `<div class="hw-q">${esc(item.text || '')}</div>${(item.images || []).map(u => `<img class="hw-q-img" src="${esc(u)}" alt="题目图片">`).join('')}`;
     }
@@ -290,6 +291,7 @@
         ${editable ? `<label class="btn btn-sm hw-upload">拍照上传<input type="file" accept="image/*" capture="environment" data-hw-photo="${item.id}" hidden></label>` : ''}
       </div>
       ${gradeUi}
+      ${verdict && verdict !== 'ok' && card?.trap ? `<p class="hw-miss"><b>容易漏的一步</b>${esc(card.trap)}</p>` : ''}
     </article>`;
   }
 

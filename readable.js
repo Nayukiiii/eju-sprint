@@ -152,5 +152,38 @@
   window.addEventListener('scroll', hidePop, true);
   window.addEventListener('resize', hidePop);
 
-  window.EJU_READ = {esc, underlineHtml, underlineMissing, passageHtml, cnFoldHtml, richHtml, geoTerms, hidePop};
+
+  // ── 数学题面：把 (1)(2)(3)(4) 各起一行，把空格 [A] / \text{[A]} 变成醒目的方框 ───────────────
+  // 公式（$…$）里的空格用 KaTeX 的 \boxed，正文里的空格用 <span class="q-blank">。
+  // 小问号只在「按 1、2、3… 顺序出现」时才换行，所以「(2) で求めた」这类引用不会被当成小问。
+  const MATH_SEG = /\$\$[\s\S]+?\$\$|\$[^$]+\$/g;
+  const BLANK_TEXT = /\\text\{\[([A-Z]{1,4})\]\}/g;
+  const BLANK_PLAIN = /\[([A-Z]{1,4})\]/g;
+  const SUBNO = /(^|[\s。；;、，,])([(（])([1-9])([)）])/g;
+
+  function mathQHtml(text) {
+    const src = String(text == null ? '' : text);
+    let expect = 1;
+    let out = '';
+    let last = 0;
+    const textPart = t => {
+      let h = esc(t).replace(BLANK_PLAIN, '<span class="q-blank">$1</span>');
+      h = h.replace(SUBNO, (m, pre, l, n, r) => {
+        if (Number(n) !== expect) return m;
+        expect++;
+        return `${pre.trim() ? pre : ''}<span class="q-brk"></span><b class="q-no">${l}${n}${r}</b>`;
+      });
+      return h;
+    };
+    src.replace(MATH_SEG, (m, off) => {
+      out += textPart(src.slice(last, off));
+      out += esc(m.replace(BLANK_TEXT, '\\boxed{\\text{$1}}').replace(BLANK_PLAIN, '\\boxed{\\text{$1}}'));
+      last = off + m.length;
+      return m;
+    });
+    out += textPart(src.slice(last));
+    return out.replace(/^(<span class="q-brk"><\/span>)+/, '');
+  }
+
+  window.EJU_READ = {esc, underlineHtml, underlineMissing, passageHtml, cnFoldHtml, richHtml, geoTerms, hidePop, mathQHtml};
 })();
