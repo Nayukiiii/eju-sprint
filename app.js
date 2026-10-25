@@ -61,6 +61,9 @@
     } catch (_) {}
     return {scope: 'all', sitting: 'all'};
   })();
+  const RECITE_KEY = 'eju-recite-v1';
+  let reciteMode = (() => { try { return localStorage.getItem(RECITE_KEY) === '1'; } catch (_) { return false; } })();
+  const reciteOn = () => reciteMode && periodMode === 'bunso';
   function saveScopePref() {
     try { localStorage.setItem(SCOPE_KEY, JSON.stringify(scopePref)); } catch (_) {}
   }
@@ -71,6 +74,8 @@
 
   // Active study session state
   let queue = [];
+  // 背题模式：整轮只看「题目 + 正确答案 + 解析」，不作答、不判定、不改进度（只记 state.recited）
+  let sessionRecite = false;
   let sessionIndex = 0;
   let activeCard = null;
   let answered = false;
@@ -629,6 +634,7 @@
 
   function renderDeckProgressGrid() {
     renderScopeBar();
+    renderReciteToggle();
     const deckDefs = getDeckListForMode();
     if (!deckDefs.some(d => d.id === selectedDeck)) {
       selectedDeck = deckDefs[0].id;
@@ -849,12 +855,63 @@
     return picked;
   }
 
+  // 背题队列：错题本里的真题 → 没做过的真题 → 其他错题 → 其余；同一档里先背最久没背过的
+  const reciteable = c => !isMathCard(c) && (c.type === 'mcq' || c.type === 'flip');
+  function reciteQueue(pool, limit = 20) {
+    const rec = state.recited || {};
+    const tier = c => isRealCard(c) ? (isWrong(c) ? 0 : (isPracticed(c) ? 3 : 1)) : (isWrong(c) ? 2 : 3);
+    const shuffled = pool.filter(reciteable).map(c => ({c, r: Math.random()}));
+    shuffled.sort((x, y) => tier(x.c) - tier(y.c) || (rec[x.c.id] || 0) - (rec[y.c.id] || 0) || x.r - y.r);
+    return shuffled.slice(0, limit).map(x => x.c);
+  }
+
+  function reciteToday() {
+    const today = localDateKey();
+    return Object.values(state.recited || {}).filter(ts => localDateKey(new Date(ts)) === today).length;
+  }
+
+  function renderReciteToggle() {
+    const btn = $('#reciteToggle');
+    if (!btn) return;
+    btn.classList.toggle('is-active', reciteMode);
+    btn.setAttribute('aria-pressed', String(reciteMode));
+    btn.textContent = `背题模式：${reciteMode ? '开' : '关'}`;
+    const n = reciteToday();
+    $('#reciteTodayNote').textContent = n ? `今天背题 ${n} 张` : '';
+    const smart = $('#startSmartBtn');
+    if (smart) smart.textContent = reciteOn() ? '开始背题 (20题)' : '开始今日任务 (20题)';
+  }
+
+  // 背题：记下背过的时间；「还要再看」的卡放到队尾再出现一次（同一张最多多出现一次）；不碰 progress / history
+  function reciteAdvance(again) {
+    if (!activeCard) return;
+    if (!state.recited) state.recited = {};
+    state.recited[activeCard.id] = Date.now();
+    if (again && queue.filter(c => c.id === activeCard.id).length < 2) queue.push(activeCard);
+    sessionIndex += 1;
+    if (state.activeSession) {
+      state.activeSession.index = sessionIndex;
+      state.activeSession.ids = queue.map(c => c.id);
+    }
+    if (sessionIndex >= queue.length) {
+      state.activeSession = null;
+      sessionRecite = false;
+      saveState();
+      switchRoute('today');
+      return;
+    }
+    saveState();
+    renderStudyCard();
+  }
+
   function startCustomPoolSession(pool, label, limit = 20, opts = {}) {
-    const picked = prioritizeCards(pool, limit, opts);
+    const picked = opts.recite ? reciteQueue(pool, limit) : prioritizeCards(pool, limit, opts);
     if (!picked.length) return;
     queue = picked;
     sessionIndex = 0;
+    sessionRecite = Boolean(opts.recite);
     state.activeSession = {ids: queue.map(c => c.id), index: 0, label};
+    if (sessionRecite) state.activeSession.recite = true;
     saveState();
     switchRoute('study');
     renderStudyCard();
@@ -867,7 +924,7 @@
   let langMode = localStorage.getItem('eju_lang_mode') || (localStorage.getItem('eju_lang_cn') === 'false' ? 'jp' : 'bi');
   if (!LANG_LABEL[langMode]) langMode = 'bi';
   const revealedCn = new Set(); // cards whose Chinese was opened in 日文优先 mode this session
-  const cnVisible = card => langMode !== 'jp' || revealedCn.has(card.id);
+  const cnVisible = card => sessionRecite || langMode !== 'jp' || revealedCn.has(card.id);
 
   function cycleLangMode() {
     langMode = {bi: 'jp', jp: 'cn', cn: 'bi'}[langMode];
@@ -947,6 +1004,8 @@
       return;
     }
     answered = false;
+    $('#view-study').classList.toggle('is-recite', sessionRecite);
+    $('#reciteBar').hidden = true;
     cardShownAt = Date.now();
     hintUsed = false;
     leftPageDuringCard = document.hidden;
@@ -1018,7 +1077,33 @@
     const markPanel = $('#studyMarkPanel');
     choicesBox.innerHTML = '';
 
-    if (activeCard.type === 'mark') {
+    if (sessionRecite && activeCard.type === 'mcq') {
+      // 背题：选项只读，正确的那项直接标出来
+      answered = true;
+      choicesBox.hidden = false;
+      flipBar.hidden = true;
+      markPanel.hidden = true;
+      const cnList = Array.isArray(activeCard.choices_cn) ? activeCard.choices_cn : [];
+      activeCard.choices.forEach((choiceText, idx) => {
+        const cnText = chineseAddition(choiceText, cnList[idx]);
+        const main = langMode === 'cn' && cnText ? cnText : choiceText;
+        const sub = langMode === 'cn' ? (cnText ? choiceText : '') : cnText;
+        const cn = sub ? `<span class="choice-cn">${sub}</span>` : '';
+        const btn = document.createElement('button');
+        btn.type = 'button';
+        btn.disabled = true;
+        btn.className = `choice-btn${idx === activeCard.a ? ' is-correct' : ''}`;
+        btn.innerHTML = `<span class="choice-key">${idx + 1}</span><span class="choice-body"><span class="choice-jp">${window.EJU_READ.richHtml(main)}</span>${cn}</span>`;
+        choicesBox.appendChild(btn);
+      });
+      showStudyFeedback(null, mcqAnswerText(activeCard));
+    } else if (sessionRecite && activeCard.type === 'flip') {
+      answered = true;
+      choicesBox.hidden = true;
+      flipBar.hidden = true;
+      markPanel.hidden = true;
+      showStudyFeedback(null, activeCard.back);
+    } else if (activeCard.type === 'mark') {
       // EJU Math authentic Marksheet fill-in [A][B][CD]
       choicesBox.hidden = true;
       flipBar.hidden = true;
@@ -1327,6 +1412,18 @@
     }
 
     $('#studyRateBar').hidden = false;
+    if (sessionRecite) {
+      // 背题：不判定、不评分，只有「看懂了 / 还要再看」
+      $('#autoRate').hidden = true;
+      $('#rateButtonsGroup').style.display = 'none';
+      $('#studyNextVariantBtn').hidden = true;
+      $('#reciteBar').hidden = false;
+      const n = reciteToday();
+      $('#reciteNote').textContent = `背题模式，不记成绩${n ? ` · 今天背题 ${n} 张` : ''}`;
+      renderMathIn(fb);
+      return;
+    }
+    $('#studyNextVariantBtn').hidden = false;
     window.EJU_LADDER_HOOK?.feedback?.(activeCard, isCorrect, isUnsure);
     activeCard._lastGradeCorrect = isCorrect && !isUnsure;
     applyAutoGrade(isCorrect, isUnsure);
@@ -1458,6 +1555,10 @@
 
   function advanceStudyCard(rateGrade) {
     if (!activeCard) return;
+    if (sessionRecite) {
+      reciteAdvance(rateGrade === 'again');
+      return;
+    }
     let finalGrade = rateGrade;
     if (activeCard._lastGradeCorrect === false && rateGrade !== 'again') {
       finalGrade = 'again'; // 答错的题（含标了「不确定」）一律进错题本，不能被改成掌握/模糊
@@ -2655,6 +2756,13 @@
     });
 
     // Top dashboard clickable boxes
+    $('#reciteToggle').addEventListener('click', () => {
+      reciteMode = !reciteMode;
+      try { localStorage.setItem(RECITE_KEY, reciteMode ? '1' : '0'); } catch (_) {}
+      renderReciteToggle();
+    });
+    $('#reciteOkBtn').addEventListener('click', () => reciteAdvance(false));
+    $('#reciteAgainBtn').addEventListener('click', () => reciteAdvance(true));
     $('#weakBoard').addEventListener('click', e => {
       const b = e.target.closest('.weak-go');
       if (b) window.EJU_LADDER_HOOK?.startConcept?.(b.dataset.cid);
@@ -2672,7 +2780,7 @@
     $('#statDueBox').addEventListener('click', () => {
       const duePool = cards.filter(isDue);
       if (duePool.length) startCustomPoolSession(duePool, '到期复习', 25);
-      else startCustomPoolSession(getFilteredPoolBySelectedDeck(), '智能刷题', 20, {mixReal: true});
+      else startCustomPoolSession(getFilteredPoolBySelectedDeck(), '智能刷题', 20, {mixReal: true, recite: reciteOn()});
     });
     $('#statWrongBox').addEventListener('click', () => switchRoute('wrong'));
 
@@ -2680,16 +2788,16 @@
     // Hero: continue an unfinished round, otherwise today's mix (due → wrong → unmastered) from all subjects
     $('#heroStartTaskBtn').addEventListener('click', () => {
       if (!$('#resumeSessionBtn').hidden) $('#resumeSessionBtn').click();
-      else startCustomPoolSession(getFilteredPoolBySelectedDeck(), '今日任务', 20, {mixReal: true});
+      else startCustomPoolSession(getFilteredPoolBySelectedDeck(), reciteOn() ? '背题' : '今日任务', 20, {mixReal: true, recite: reciteOn()});
     });
     $('#heroWrongBox').addEventListener('click', () => switchRoute('wrong'));
 
     $('#startSmartBtn').addEventListener('click', () => {
-      startCustomPoolSession(getFilteredPoolBySelectedDeck(), selectedDeck, 20, {mixReal: true});
+      startCustomPoolSession(getFilteredPoolBySelectedDeck(), reciteOn() ? `背题：${selectedDeck}` : selectedDeck, 20, {mixReal: true, recite: reciteOn()});
     });
     $('#startUnmasteredBtn').addEventListener('click', () => {
       const pool = getFilteredPoolBySelectedDeck().filter(c => !isMastered(c));
-      startCustomPoolSession(pool.length ? pool : getFilteredPoolBySelectedDeck(), `${selectedDeck}·未掌握`, 20, {mixReal: true});
+      startCustomPoolSession(pool.length ? pool : getFilteredPoolBySelectedDeck(), `${selectedDeck}·未掌握`, 20, {mixReal: true, recite: reciteOn()});
     });
     $('#startVariantBtn').addEventListener('click', () => {
       const pool = getFilteredPoolBySelectedDeck().filter(isVariantCard);
@@ -2700,6 +2808,7 @@
       const map = new Map(cards.map(c => [c.id, c]));
       queue = state.activeSession.ids.map(id => map.get(id)).filter(Boolean);
       sessionIndex = state.activeSession.index || 0;
+      sessionRecite = Boolean(state.activeSession.recite);
       if (queue.length) {
         switchRoute('study');
         renderStudyCard();
@@ -3212,6 +3321,7 @@
     getSession: () => ({queue, index: sessionIndex, card: activeCard}),
     setSession(list, label, index = 0) {
       queue = list;
+      sessionRecite = false;
       sessionIndex = index;
       state.activeSession = {ids: list.map(c => c.id), index, label};
       saveState();

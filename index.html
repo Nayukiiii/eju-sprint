@@ -165,6 +165,7 @@
         <!-- 范围筛选：全部 / 基础 / 真题（真题可再选回次） -->
         <div class="scope-bar" id="scopeBar">
           <div class="scope-row"><span class="scope-label">范围</span><div class="scope-chips" id="scopeChips"></div></div>
+          <div class="scope-row"><span class="scope-label">背题</span><div class="scope-chips"><button type="button" class="scope-chip" id="reciteToggle" aria-pressed="false">背题模式：关</button><span class="recite-note" id="reciteTodayNote"></span></div></div>
           <div class="scope-row" id="sittingRow" hidden><span class="scope-label">回次</span><div class="scope-chips" id="sittingChips"></div></div>
         </div>
 
@@ -706,6 +707,13 @@
             <button class="btn btn-ok" data-rate="good" type="button">掌握<span class="kbd"> (3)</span></button>
           </div>
           <button class="btn btn-sm" id="studyNextVariantBtn" type="button">同考点再练一道</button>
+          <div class="recite-bar" id="reciteBar" hidden>
+            <div class="recite-btns">
+              <button class="btn btn-primary" id="reciteOkBtn" type="button">看懂了</button>
+              <button class="btn" id="reciteAgainBtn" type="button">还要再看</button>
+            </div>
+            <p class="auto-note" id="reciteNote"></p>
+          </div>
         </div>
 
         <div class="kbd-hint">快捷键：选择题按 <code>1-4</code> · 填空题按 <code>0-9/-</code> · <code>Enter/Space</code> 提交与下一题 · 选择题/填空题答完自动判定掌握程度，按 <code>Enter</code> 就是接受</div>

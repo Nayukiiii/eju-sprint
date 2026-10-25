@@ -3987,3 +3987,16 @@ sup.ul-n { font-size: 10px; font-weight: 700; margin-left: 1px; color: var(--acc
 .weak-num { font-size: 12px; color: var(--text-muted); white-space: nowrap; }
 .weak-go { flex: none; white-space: nowrap; }
 .weak-empty { font-size: 12px; color: var(--text-muted); }
+
+/* ─── Recite mode ─── */
+.recite-note { font-size: 12px; color: var(--text-muted); align-self: center; }
+.recite-bar { width: 100%; }
+.recite-btns { display: flex; gap: 10px; }
+.recite-btns .btn { flex: 1; min-height: 48px; font-size: 16px; }
+#view-study.is-recite #studyHintBtn,
+#view-study.is-recite #studyUnsureBtn,
+#view-study.is-recite .kbd-hint { display: none; }
+#view-study.is-recite .choice-btn { opacity: 1; }
+#view-study.is-recite .choice-btn.is-correct { background: var(--ok-soft); border-color: var(--ok); }
+#view-study.is-recite .choice-btn:not(.is-correct) { opacity: 0.6; }
+.recite-bar .auto-note { text-align: center; margin: 8px 0 0; }
