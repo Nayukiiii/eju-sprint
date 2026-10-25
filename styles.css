@@ -3968,3 +3968,13 @@ sup.ul-n { font-size: 10px; font-weight: 700; margin-left: 1px; color: var(--acc
 .tier-legend { display: flex; align-items: center; gap: 4px; flex-wrap: wrap; font-size: 11px; color: var(--text-muted); }
 .tier-legend i { display: inline-block; width: 9px; height: 9px; border-radius: 3px; margin-left: 8px; border: 1px solid var(--border); }
 .tier-legend i:first-child { margin-left: 0; }
+
+/* ─── Practice scope filter ─── */
+.scope-bar { margin: 4px 0 12px; display: grid; gap: 8px; }
+.scope-row { display: flex; align-items: center; gap: 8px; }
+.scope-row[hidden] { display: none; }
+.scope-label { font-size: 13px; font-weight: 600; color: var(--text-muted); flex: 0 0 auto; width: 2.6em; }
+.scope-chips { display: flex; gap: 6px; flex-wrap: wrap; }
+.scope-chip { font: inherit; font-size: 14px; padding: 7px 12px; min-height: 40px; border-radius: 99px; border: 1px solid var(--border); background: var(--surface); color: var(--text); cursor: pointer; }
+.scope-chip.is-active { background: var(--primary-soft); border-color: var(--primary); color: var(--primary); font-weight: 700; }
+.deck-chip-empty { grid-column: 1 / -1; font-size: 13px; color: var(--text-muted); }

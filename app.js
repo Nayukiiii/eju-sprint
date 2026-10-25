@@ -51,6 +51,19 @@
   let periodMode = 'bunso'; // 'bunso' | 'math'
   let currentRoute = 'today';
   let selectedDeck = '全部文综';
+  // 范围筛选（文综模式）：all / basic（基础题，含先修卡）/ real（真题，可再选回次）
+  const SCOPE_KEY = 'eju-scope-v1';
+  const SITTINGS = [['2023_1', '2023-1'], ['2023_2', '2023-2'], ['2024', '2024'], ['2025', '2025']];
+  const scopePref = (() => {
+    try {
+      const v = JSON.parse(localStorage.getItem(SCOPE_KEY));
+      if (v && ['all', 'basic', 'real'].includes(v.scope)) return {scope: v.scope, sitting: v.sitting || 'all'};
+    } catch (_) {}
+    return {scope: 'all', sitting: 'all'};
+  })();
+  function saveScopePref() {
+    try { localStorage.setItem(SCOPE_KEY, JSON.stringify(scopePref)); } catch (_) {}
+  }
   let currentKnowledgeCat = 'all';
   let wrongFilter = 'all';
   let auditTableFilter = 'all';
@@ -545,22 +558,60 @@
     ];
   }
 
+  const scopeMatch = c => {
+    if (periodMode !== 'bunso' || scopePref.scope === 'all') return true;
+    if (scopePref.scope === 'basic') return !isRealCard(c);
+    return isRealCard(c) && (scopePref.sitting === 'all' || c.sitting === scopePref.sitting);
+  };
+
+  function renderScopeBar() {
+    const bar = $('#scopeBar');
+    if (!bar) return;
+    bar.hidden = periodMode !== 'bunso';
+    if (bar.hidden) return;
+    const bunso = cards.filter(c => BUNSO_DECKS.includes(c.deck));
+    const nReal = bunso.filter(isRealCard).length;
+    const chip = (attr, val, label, on) => `<button type="button" class="scope-chip${on ? ' is-active' : ''}" data-${attr}="${val}">${label}</button>`;
+    $('#scopeChips').innerHTML = [
+      ['all', `全部 ${bunso.length}`], ['basic', `基础 ${bunso.length - nReal}`], ['real', `真题 ${nReal}`]
+    ].map(([v, l]) => chip('scope', v, l, scopePref.scope === v)).join('');
+    const showSit = scopePref.scope === 'real';
+    $('#sittingRow').hidden = !showSit;
+    if (showSit) {
+      const realCards = bunso.filter(isRealCard);
+      $('#sittingChips').innerHTML = [['all', `全部回次 ${realCards.length}`], ...SITTINGS.map(([v, l]) => [v, `${l} ${realCards.filter(c => c.sitting === v).length}`])]
+        .map(([v, l]) => chip('sitting', v, l, scopePref.sitting === v)).join('');
+    }
+  }
+
   function renderDeckProgressGrid() {
+    renderScopeBar();
     const deckDefs = getDeckListForMode();
     if (!deckDefs.some(d => d.id === selectedDeck)) {
       selectedDeck = deckDefs[0].id;
     }
 
     $('#consoleTitle').textContent = periodMode === 'bunso' ? '文综分科刷题与掌握进度' : '全科刷题与掌握进度';
-    $('#consoleSub').textContent = `当前：${selectedDeck}（未核实题不计入掌握率）`;
+    const scopeNote = periodMode !== 'bunso' || scopePref.scope === 'all' ? ''
+      : scopePref.scope === 'basic' ? ' · 基础题'
+        : ` · 真题${scopePref.sitting === 'all' ? '' : ' ' + (SITTINGS.find(s => s[0] === scopePref.sitting)?.[1] || '')}`;
+    const poolSize = getFilteredPoolBySelectedDeck().length;
+    $('#consoleSub').textContent = `当前：${selectedDeck}${scopeNote} · ${poolSize} 题${poolSize ? '' : '（这个范围没有题，换一个）'}`;
 
     const container = $('#deckFilterBar');
     container.innerHTML = '';
 
     for (const def of deckDefs) {
-      const pool = cards.filter(def.filter);
+      const pool = cards.filter(def.filter).filter(scopeMatch);
       const total = pool.length;
-      if (total === 0) continue;
+      if (total === 0 && def.id !== selectedDeck) continue;
+      if (total === 0) {
+        const none = document.createElement('div');
+        none.className = 'deck-chip deck-chip-empty is-active';
+        none.textContent = `${def.label}：没有题`;
+        container.appendChild(none);
+        continue;
+      }
       const verifiedPool = pool.filter(isCountedForMastery);
       const unverifiedInPool = total - verifiedPool.length;
       const mastered = verifiedPool.filter(isMastered).length;
@@ -706,7 +757,7 @@
   function getFilteredPoolBySelectedDeck() {
     const defs = getDeckListForMode();
     const found = defs.find(d => d.id === selectedDeck) || defs[0];
-    return cards.filter(found.filter);
+    return cards.filter(found.filter).filter(scopeMatch);
   }
 
   // Official (real) questions vs self-written ones. The self-written cards were drilled first, so they sit in the
@@ -2561,6 +2612,16 @@
     });
 
     // Top dashboard clickable boxes
+    $('#scopeBar').addEventListener('click', e => {
+      const b = e.target.closest('.scope-chip');
+      if (!b) return;
+      if (b.dataset.scope) {
+        scopePref.scope = b.dataset.scope;
+        if (scopePref.scope !== 'real') scopePref.sitting = 'all';
+      } else if (b.dataset.sitting) scopePref.sitting = b.dataset.sitting;
+      saveScopePref();
+      renderDeckProgressGrid();
+    });
     $('#statDueBox').addEventListener('click', () => {
       const duePool = cards.filter(isDue);
       if (duePool.length) startCustomPoolSession(duePool, '到期复习', 25);
