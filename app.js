@@ -1271,7 +1271,7 @@
 
   // ─── 自动判定掌握程度（选择题 / 填空题有对错；翻卡题没有对错，仍然手动三选一）───
   // 答错或标「不确定」→ 没掌握；答对 → 看有没有用提示/速查表、用时是否明显偏长：没问题记「掌握」，否则记「模糊」。
-  // 用时上限随题目长短变化（读材料要时间）：40 秒 + 每个字 0.15 秒，最多 180 秒；中途切走过页面则不按用时降级。
+  // 用时上限随题目长短变化（读材料要时间）：(40 秒 + 每个字 0.15 秒，最多 180 秒) 的 2 倍，最多 300 秒；中途切走过页面则不按用时降级。
   function autoGradeFor(card, isCorrect, isUnsure) {
     if (isCorrect === null || isCorrect === undefined) return null;
     if (isUnsure || isCorrect === false) {
@@ -1279,10 +1279,12 @@
     }
     const chars = String(card.q || '').length + String(card.passage || '').length
       + (Array.isArray(card.choices) ? card.choices.join('').length : 0);
-    const limit = Math.min(180, 40 + chars * 0.15);
+    // 用时只在「慢到离谱」时才降级（正常读日语材料本来就慢）：参考时间的 2 倍，最多 300 秒。
+    // 「模糊」要少用（Anki 的建议：大多数时候按「良好」，「困难」少用），主要靠「用了提示/速查表」来判。
+    const limit = Math.min(300, 2 * Math.min(180, 40 + chars * 0.15));
     const secs = Math.max(0, Math.round((Date.now() - cardShownAt) / 1000));
     if (hintUsed) return {grade: 'hard', note: `答对了，但用了提示/速查表（${secs} 秒）`};
-    if (!leftPageDuringCard && secs > limit) return {grade: 'hard', note: `答对了，但用时偏长（${secs} 秒，这道题参考 ${Math.round(limit)} 秒内）`};
+    if (!leftPageDuringCard && secs > limit) return {grade: 'hard', note: `答对了，但用时太长（${secs} 秒，这道题参考 ${Math.round(limit)} 秒内）`};
     return {grade: 'good', note: `答对了，${secs} 秒，没用提示`};
   }
 
