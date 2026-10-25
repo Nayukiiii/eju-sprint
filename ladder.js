@@ -81,6 +81,25 @@
     A.setSession(list, '先修小轮');
   }
 
+  // 弱点考点榜的「练这个考点」：先把该概念的先修卡全部做一遍，再做标了这个概念的真题（最多 6 道，没做对过的优先）。
+  // 复用先修小轮：先修卡 + 真题放进同一个队列，闸门出现在第一道真题前。
+  function startConcept(cid) {
+    if (!D.concepts[cid]) return;
+    const prereq = conceptCards(cid);
+    const reals = realCards().filter(c => conceptsOf(c.id).includes(cid))
+      .sort((a, b) => (cardDone(a) ? 1 : 0) - (cardDone(b) ? 1 : 0))
+      .slice(0, 6);
+    const list = [...prereq, ...reals];
+    if (!list.length) return;
+    const conceptOf = new Map(prereq.map(c => [c.id, cid]));
+    mini = {
+      targetId: reals.length ? reals[0].id : null, queueRef: list, parent: null,
+      concepts: [cid], conceptOf, gateDone: !prereq.length || !reals.length,
+      practice: {cid, ids: reals.map(c => c.id)}
+    };
+    A.setSession(list, '练考点', 0);
+  }
+
   function restoreParent(parent) {
     if (parent.next) {
       parent.next();
@@ -163,7 +182,14 @@
       ? '<span class="lad-chip lad-chip-now">● 回到原题</span>'
       : '<span class="lad-chip lad-chip-todo">回到原题</span>';
     const pos = mini.parent?.next ? todayPos(mini.targetId) : '';
-    el.innerHTML = `<span class="lad-banner-label">${pos}先修小轮</span>${path}<span class="lad-arrow">→</span>${tail}`;
+    const pr = mini.practice;
+    if (pr && cid === null) {
+      // 练考点：先修走完之后，后面是这个概念的真题
+      const k = pr.ids.indexOf(card.id) + 1;
+      el.innerHTML = `<span class="lad-banner-label">练「${esc(D.concepts[pr.cid].titleCn)}」· 真题 ${k}/${pr.ids.length}</span>`;
+    } else {
+      el.innerHTML = `<span class="lad-banner-label">${pos}先修小轮</span>${path}<span class="lad-arrow">→</span>${tail}`;
+    }
     sc.parentNode.insertBefore(el, sc);
   }
 
@@ -559,6 +585,7 @@
 
   window.EJU_LADDER_HOOK = {
     today: renderHome,
+    startConcept,
     feedback: renderFeedbackBox,
     rendered(card) {
       clearStudyExtras();

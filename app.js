@@ -458,6 +458,48 @@
     return streak;
   }
 
+  // 最弱的考点：按概念汇总先修卡 + 标了该概念的真题的作答记录，答过 >= 2 次才排序，按（错 + 模糊）占比从高到低
+  function weakConcepts(limit = 5) {
+    const L = window.EJU_LADDER;
+    if (!L || !L.concepts) return [];
+    const byId = {};
+    for (const h of state.history) {
+      if (!isMineEntry(h)) continue;
+      const s = byId[h.id] || (byId[h.id] = {n: 0, wrong: 0, fuzzy: 0});
+      s.n++;
+      if (h.grade === 'again') s.wrong++;
+      else if (h.grade === 'hard') s.fuzzy++;
+    }
+    const realByConcept = {};
+    for (const [id, v] of Object.entries(L.real || {})) for (const cid of v.concepts || []) (realByConcept[cid] || (realByConcept[cid] = [])).push(id);
+    const out = [];
+    for (const [cid, c] of Object.entries(L.concepts)) {
+      let n = 0, wrong = 0, fuzzy = 0;
+      for (const id of [...(c.cardIds || []), ...(realByConcept[cid] || [])]) {
+        const s = byId[id];
+        if (s) { n += s.n; wrong += s.wrong; fuzzy += s.fuzzy; }
+      }
+      if (n >= 2 && wrong + fuzzy > 0) out.push({cid, title: c.titleCn, n, wrong, fuzzy, rate: (wrong + fuzzy) / n});
+    }
+    return out.sort((a, b) => b.rate - a.rate || b.n - a.n).slice(0, limit);
+  }
+
+  function renderWeakBoard() {
+    const box = $('#weakBoard');
+    if (!box) return;
+    const list = weakConcepts();
+    if (!list.length) {
+      box.innerHTML = '<div class="weak-empty">多做几题，这里会出现你最弱的考点</div>';
+      return;
+    }
+    box.innerHTML = `<div class="weak-title">最弱的考点</div>` + list.map(w => `
+      <div class="weak-row">
+        <span class="weak-name">${escapeHtml(w.title)}</span>
+        <span class="weak-num">错 ${w.wrong}${w.fuzzy ? ` · 模糊 ${w.fuzzy}` : ''} / 答 ${w.n}</span>
+        <button type="button" class="btn btn-sm weak-go" data-cid="${escapeHtml(w.cid)}">练这个考点</button>
+      </div>`).join('');
+  }
+
   function renderTierProgress() {
     const box = $('#tierCard');
     if (!box) return;
@@ -478,6 +520,7 @@
     }
     $('#tierCorrectTotal').textContent = `累计答对 ${correctTotalMine()} 题`;
     $('#tierStreak').textContent = `连续刷题 ${practiceStreakMine()} 天`;
+    renderWeakBoard();
   }
 
   function langHelpCards() {
@@ -2612,6 +2655,10 @@
     });
 
     // Top dashboard clickable boxes
+    $('#weakBoard').addEventListener('click', e => {
+      const b = e.target.closest('.weak-go');
+      if (b) window.EJU_LADDER_HOOK?.startConcept?.(b.dataset.cid);
+    });
     $('#scopeBar').addEventListener('click', e => {
       const b = e.target.closest('.scope-chip');
       if (!b) return;
