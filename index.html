@@ -685,6 +685,11 @@
 
         <!-- 底部评分/下一题控制栏 -->
         <div class="study-Rate-bar" id="studyRateBar" hidden>
+          <div class="auto-rate" id="autoRate" hidden>
+            <button class="btn btn-primary btn-auto-next" id="autoNextBtn" type="button">下一题 →</button>
+            <p class="auto-note" id="autoNote"></p>
+            <div class="auto-override" id="autoOverride">不同意？<span id="autoOverrideBtns"></span></div>
+          </div>
           <div class="rate-buttons" id="rateButtonsGroup">
             <button class="btn btn-danger-soft" data-rate="again" type="button">没掌握<span class="kbd"> (1)</span></button>
             <button class="btn" data-rate="hard" type="button">模糊<span class="kbd"> (2)</span></button>
@@ -693,7 +698,7 @@
           <button class="btn btn-sm" id="studyNextVariantBtn" type="button">同考点再练一道</button>
         </div>
 
-        <div class="kbd-hint">快捷键：选择题按 <code>1-4</code> · 填空题按 <code>0-9/-</code> · <code>Enter/Space</code> 提交与下一题</div>
+        <div class="kbd-hint">快捷键：选择题按 <code>1-4</code> · 填空题按 <code>0-9/-</code> · <code>Enter/Space</code> 提交与下一题 · 选择题/填空题答完自动判定掌握程度，按 <code>Enter</code> 就是接受</div>
       </article>
     </section>
 

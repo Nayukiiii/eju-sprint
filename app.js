@@ -61,6 +61,10 @@
   let sessionIndex = 0;
   let activeCard = null;
   let answered = false;
+  // 自动判定掌握程度用：这张卡出现的时间、答题前有没有用提示/速查表、期间有没有切走页面
+  let cardShownAt = 0;
+  let hintUsed = false;
+  let leftPageDuringCard = false;
 
   // Math Tutoring Station state
   let tutorSource = 'cards'; // 'cards' | 'papers'
@@ -801,6 +805,9 @@
       return;
     }
     answered = false;
+    cardShownAt = Date.now();
+    hintUsed = false;
+    leftPageDuringCard = document.hidden;
 
     const total = queue.length;
     $('#studyProgressText').textContent = `${sessionIndex + 1} / ${total}`;
@@ -1180,6 +1187,7 @@
     $('#studyRateBar').hidden = false;
     window.EJU_LADDER_HOOK?.feedback?.(activeCard, isCorrect, isUnsure);
     activeCard._lastGradeCorrect = isCorrect && !isUnsure;
+    applyAutoGrade(isCorrect, isUnsure);
     renderMathIn(fb);
   }
 
@@ -1195,14 +1203,17 @@
     let clearedVariant = Boolean(prev.clearedVariant);
 
     const ok = (grade === 'good' || grade === 'easy') && !isUnsure;
-    if (!ok) {
+    // 模糊（hard）：答对了但没把握（用了提示 / 用时偏长 / 自己点的）。不算答错：不进错题本、不记失误，
+    // 只把掌握档位降一档（最低 1），让它明天就再出现。以前这一档会被当成答错处理，下面那个 hard 分支永远走不到。
+    const soft = grade === 'hard' && !isUnsure;
+    if (soft) {
+      box = Math.max(1, box - 1);
+    } else if (!ok) {
       box = 0;
       lapses += 1;
       inWrongBook = true;
       clearedOriginal = false;
       clearedVariant = false;
-    } else if (grade === 'hard') {
-      box = Math.max(1, box);
     } else {
       box = Math.min(INTERVALS.length - 1, box + 1);
       if (inWrongBook) {
@@ -1258,11 +1269,54 @@
     scheduleAtriReport();
   }
 
+  // ─── 自动判定掌握程度（选择题 / 填空题有对错；翻卡题没有对错，仍然手动三选一）───
+  // 答错或标「不确定」→ 没掌握；答对 → 看有没有用提示/速查表、用时是否明显偏长：没问题记「掌握」，否则记「模糊」。
+  // 用时上限随题目长短变化（读材料要时间）：40 秒 + 每个字 0.15 秒，最多 180 秒；中途切走过页面则不按用时降级。
+  function autoGradeFor(card, isCorrect, isUnsure) {
+    if (isCorrect === null || isCorrect === undefined) return null;
+    if (isUnsure || isCorrect === false) {
+      return {grade: 'again', note: isUnsure ? '标了「不确定」，已进错题本' : '答错了，已进错题本'};
+    }
+    const chars = String(card.q || '').length + String(card.passage || '').length
+      + (Array.isArray(card.choices) ? card.choices.join('').length : 0);
+    const limit = Math.min(180, 40 + chars * 0.15);
+    const secs = Math.max(0, Math.round((Date.now() - cardShownAt) / 1000));
+    if (hintUsed) return {grade: 'hard', note: `答对了，但用了提示/速查表（${secs} 秒）`};
+    if (!leftPageDuringCard && secs > limit) return {grade: 'hard', note: `答对了，但用时偏长（${secs} 秒，这道题参考 ${Math.round(limit)} 秒内）`};
+    return {grade: 'good', note: `答对了，${secs} 秒，没用提示`};
+  }
+
+  const GRADE_LABEL = {again: '没掌握', hard: '模糊', good: '掌握'};
+
+  function applyAutoGrade(isCorrect, isUnsure) {
+    const auto = autoGradeFor(activeCard, isCorrect, isUnsure);
+    activeCard._auto = auto;
+    const box = $('#autoRate');
+    const manual = $('#rateButtonsGroup');
+    if (!box || !manual) return;
+    if (!auto) {
+      box.hidden = true;
+      manual.style.display = '';
+      return;
+    }
+    box.hidden = false;
+    manual.style.display = 'none';
+    $('#autoNote').innerHTML = `自动记为：<b>${GRADE_LABEL[auto.grade]}</b>（${auto.note}）`;
+    const others = auto.grade === 'again' ? [] : ['good', 'hard', 'again'].filter(g => g !== auto.grade);
+    $('#autoOverride').hidden = !others.length;
+    $('#autoOverrideBtns').innerHTML = others.map(g => `<button type="button" data-override="${g}">改记为${GRADE_LABEL[g]}</button>`).join('');
+    $$('#autoOverrideBtns [data-override]').forEach(btn => {
+      btn.addEventListener('click', () => advanceStudyCard(btn.dataset.override));
+    });
+  }
+
+  const autoOrGood = () => (activeCard && activeCard._auto && activeCard._auto.grade) || 'good';
+
   function advanceStudyCard(rateGrade) {
     if (!activeCard) return;
     let finalGrade = rateGrade;
-    if (activeCard._lastGradeCorrect === false && rateGrade === 'good') {
-      finalGrade = 'again'; // ensure wrong answers stay in wrong book
+    if (activeCard._lastGradeCorrect === false && rateGrade !== 'again') {
+      finalGrade = 'again'; // 答错的题（含标了「不确定」）一律进错题本，不能被改成掌握/模糊
     }
     recordCardGrade(activeCard, finalGrade);
 
@@ -2516,6 +2570,7 @@
       box.hidden = !box.hidden;
     });
     $('#studyHintBtn').addEventListener('click', () => {
+      if (!answered) hintUsed = true;
       const box = $('#studyHintBox');
       box.hidden = !box.hidden;
       renderMathIn(box);
@@ -2534,6 +2589,7 @@
     });
     $('#studyRefBtn').addEventListener('click', () => {
       if (!activeCard) return;
+      if (!answered) hintUsed = true;
       const kpList = window.EJU_KNOWLEDGE || [];
       const match = findMatchedKp(activeCard);
       if (!match) return;
@@ -2583,6 +2639,8 @@
     $$('#rateButtonsGroup [data-rate]').forEach(btn => {
       btn.addEventListener('click', () => advanceStudyCard(btn.dataset.rate));
     });
+    $('#autoNextBtn')?.addEventListener('click', () => advanceStudyCard(autoOrGood()));
+    document.addEventListener('visibilitychange', () => { if (document.hidden) leftPageDuringCard = true; });
     $('#studyNextVariantBtn').addEventListener('click', () => {
       if (!activeCard) return;
       const sameTopic = cards.filter(c => c.id !== activeCard.id && (c.topic === activeCard.topic || c.deck === activeCard.deck));
@@ -2590,7 +2648,7 @@
       if (nextVar) {
         queue.splice(sessionIndex + 1, 0, nextVar);
       }
-      advanceStudyCard('good');
+      advanceStudyCard(autoOrGood());
     });
 
     // Keyboard shortcuts in Study View
@@ -2627,7 +2685,7 @@
       } else {
         if (e.key === ' ' || e.key === 'Enter' || e.key === '3') {
           e.preventDefault();
-          advanceStudyCard('good');
+          advanceStudyCard(e.key === '3' ? 'good' : autoOrGood());
         } else if (e.key === '1') {
           e.preventDefault();
           advanceStudyCard('again');
