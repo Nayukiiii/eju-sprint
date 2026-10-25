@@ -2730,6 +2730,12 @@
       switchRoute('math');
     });
 
+    // 核验是内部审计页，不放在主导航里，从云同步弹窗底部进入
+    $('#auditLinkBtn')?.addEventListener('click', () => {
+      $('#syncModal').hidden = true;
+      switchRoute('audit');
+    });
+
     // Main nav tabs
     $$('.nav-tab').forEach(tab => {
       tab.addEventListener('click', () => switchRoute(tab.dataset.route));
