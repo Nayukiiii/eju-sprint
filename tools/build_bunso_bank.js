@@ -60,7 +60,34 @@ for (const file of files) {
         throw new Error(`${c.id}: referenced paperImg not found: ${imgPath}`);
       }
     }
+    liftStatementChoices(c);
     allCards.push(c);
+  }
+}
+
+
+// 选项只有 Ａ～Ｄ 字母、而 Ａ～Ｄ 的陈述写在题干里时（如 2023第2回 問2(2)、問5），把陈述挪进选项，题干只留引导句
+function liftStatementChoices(c) {
+  const lift = (q, choices) => {
+    if (!choices.every(x => /^[ＡＢＣＤA-D]$/.test(String(x).trim()))) return null;
+    const lines = String(q).split('\n');
+    const found = {};
+    const rest = [];
+    for (const line of lines) {
+      const m = line.match(/^([ＡＢＣＤA-D])[：:]\s*(.+)$/);
+      if (m) found[m[1].normalize('NFKC')] = m[2].trim();
+      else rest.push(line);
+    }
+    if (Object.keys(found).length !== 4) return null;
+    return {q: rest.join('\n').replace(/\s+$/, ''), choices: choices.map(x => `${String(x).trim()}：${found[String(x).trim().normalize('NFKC')]}`)};
+  };
+  const ja = lift(c.q, c.choices);
+  const cn = lift(c.q_cn, c.choices_cn);
+  if (ja && cn) {
+    c.q = ja.q; c.choices = ja.choices;
+    c.q_cn = cn.q; c.choices_cn = cn.choices;
+  } else if (ja || cn) {
+    throw new Error(`${c.id}: 日文和中文题干的 Ａ～Ｄ 陈述不一致，无法移入选项`);
   }
 }
 
